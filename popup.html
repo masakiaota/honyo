@@ -205,19 +205,15 @@
           opacity: 0.3;
         }
       }
-      /* Small muted caption above the text: language direction, back-translation
-         label, or an error. Fixed small size — never scaled by the font-size
-         setting (which only targets .translation-text). */
+      /* Caption below the header — used only for back-translation error
+         messages (muted italic). Hidden otherwise. Fixed small size, never
+         scaled by the font-size setting (which only targets .translation-text). */
       .back-caption {
         font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
         color: var(--text-secondary);
         margin-bottom: 8px;
       }
       .back-caption.error {
-        letter-spacing: normal;
-        font-weight: 400;
         font-style: italic;
       }
       /* Custom scrollbar */
@@ -276,7 +272,7 @@
               fill="none"
             />
           </svg>
-          Honyo Translator
+          <span id="header-title-text">Honyo Translator</span>
         </span>
         <div class="header-buttons">
           <button
@@ -359,6 +355,31 @@
         return l.source + ' → ' + l.target;
       }
 
+      function reversedLangs(l) {
+        return { source: l.target, target: l.source };
+      }
+
+      // The header title doubles as the language-direction indicator for the
+      // current view; falls back to the app name when no pair is known.
+      function updateHeaderTitle() {
+        const el = document.getElementById('header-title-text');
+        let text = 'Honyo Translator';
+        if (view === 'back') {
+          if (backLangs) text = formatLangs(backLangs);
+          else if (currentLangs) text = formatLangs(reversedLangs(currentLangs));
+        } else if (currentLangs) {
+          text = formatLangs(currentLangs);
+        }
+        el.textContent = text;
+      }
+
+      function hideCaption() {
+        const caption = document.getElementById('back-caption');
+        caption.classList.remove('error');
+        caption.textContent = '';
+        caption.style.display = 'none';
+      }
+
       function applyFontSize(size) {
         currentFontSize = size;
         document.getElementById('translation-text').style.fontSize = size + 'px';
@@ -378,34 +399,23 @@
       }
 
       // Render the current view (translation vs back-translation) into the main
-      // text area, and update the caption + toggle button. Does not touch the
-      // disabled state (see updateBackButtonState) or the loading caption.
+      // text area, update the header language indicator + toggle button, and
+      // clear any leftover error caption. Does not touch the disabled state
+      // (see updateBackButtonState).
       function renderView() {
         const textEl = document.getElementById('translation-text');
-        const caption = document.getElementById('back-caption');
         const btn = document.getElementById('back-btn');
         if (view === 'back') {
           textEl.textContent = backTranslation ?? '';
-          caption.classList.remove('error');
-          caption.textContent = backLangs
-            ? 'Back translation · ' + formatLangs(backLangs)
-            : 'Back translation';
-          caption.style.display = 'block';
           setBackButtonLabel(btn, 'Show translation');
           btn.classList.add('active');
         } else {
           textEl.textContent = currentTranslation;
-          caption.classList.remove('error');
-          if (currentLangs) {
-            caption.textContent = formatLangs(currentLangs);
-            caption.style.display = 'block';
-          } else {
-            caption.textContent = '';
-            caption.style.display = 'none';
-          }
           setBackButtonLabel(btn, 'Back-translate');
           btn.classList.remove('active');
         }
+        hideCaption();
+        updateHeaderTitle();
       }
 
       // The back button is icon-only; convey its meaning via title + aria-label.
@@ -421,13 +431,11 @@
         backLangs = null;
         isBackLoading = false;
         view = 'translation';
-        const caption = document.getElementById('back-caption');
-        caption.classList.remove('error');
-        caption.textContent = '';
-        caption.style.display = 'none';
+        hideCaption();
         const btn = document.getElementById('back-btn');
         btn.classList.remove('active', 'loading');
         setBackButtonLabel(btn, 'Back-translate');
+        updateHeaderTitle();
       }
 
       // Context menu for translation text
@@ -461,7 +469,7 @@
           data && data.sourceLanguage && data.targetLanguage
             ? { source: data.sourceLanguage, target: data.targetLanguage }
             : null;
-        if (view === 'translation') renderView();
+        updateHeaderTitle();
       });
 
       // Receive translation data
@@ -519,11 +527,9 @@
         }
 
         // No cache yet: request it, keeping the translation visible meanwhile.
+        // The button's pulse + disabled state signals loading (no caption).
         isBackLoading = true;
-        const caption = document.getElementById('back-caption');
-        caption.classList.remove('error');
-        caption.textContent = 'Translating back…';
-        caption.style.display = 'block';
+        hideCaption();
         const btn = document.getElementById('back-btn');
         btn.classList.add('loading');
         btn.disabled = true;
