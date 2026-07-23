@@ -131,3 +131,84 @@ jobs:
         body_path: RELEASE_NOTES.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+      with:
+        app-id: ${{ vars.GH_APP_ID }}
+        private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+        owner: eukarya-inc
+        repositories: homebrew-tap
+
+    - name: Download macOS x64 artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-latest-x64-build
+        path: artifacts/x64
+
+    - name: Download macOS arm64 artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-latest-arm64-build
+        path: artifacts/arm64
+
+    - name: Generate Homebrew cask
+      run: |
+        TAG=${GITHUB_REF#refs/tags/}
+        VERSION=${TAG#v}
+
+        SHA_X64=$(sha256sum "artifacts/x64/Honyo-${VERSION}.dmg" | awk '{print $1}')
+        SHA_ARM=$(sha256sum "artifacts/arm64/Honyo-${VERSION}-arm64.dmg" | awk '{print $1}')
+
+        cat > honyo.rb <<CASK
+        cask "honyo" do
+          version "${VERSION}"
+
+          on_intel do
+            url "https://github.com/eukarya-inc/honyo/releases/download/v#{version}/Honyo-#{version}.dmg"
+            sha256 "${SHA_X64}"
+          end
+          on_arm do
+            url "https://github.com/eukarya-inc/honyo/releases/download/v#{version}/Honyo-#{version}-arm64.dmg"
+            sha256 "${SHA_ARM}"
+          end
+
+          name "Honyo"
+          desc "AI-powered instant translation with double Cmd+C"
+          homepage "https://github.com/eukarya-inc/honyo"
+
+          auto_updates true
+          app "Honyo.app"
+
+          zap trash: [
+            "~/Library/Application Support/honyo",
+            "~/Library/Preferences/com.rot1024.honyo.plist",
+          ]
+        end
+        CASK
+
+        cat honyo.rb
+
+    - name: Push to Homebrew tap
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: |
+        git clone "https://x-access-token:${GH_TOKEN}@github.com/eukarya-inc/homebrew-tap.git" tap
+        mkdir -p tap/Casks
+        cp honyo.rb tap/Casks/honyo.rb
+        cd tap
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        TAG=${GITHUB_REF#refs/tags/}
+        git add Casks/honyo.rb
+        git diff --cached --quiet || {
+          git commit -m "Update honyo cask to ${TAG}"
+          git push
+        }
