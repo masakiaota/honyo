@@ -13,9 +13,11 @@
 
 - ⚡ **Instant Translation** - Double Ctrl/Cmd+C to translate any selected text
 - 🌍 **Multi-Language Support** - 26 built-in languages plus custom language support
-- 🤖 **Multiple AI Models** - Support for Claude, GPT, Gemini, and custom models
-- 💬 **Two Display Modes** - Notification with auto-copy or interactive popup window
-- 🎨 **Customizable** - Custom instructions, languages, and translation rules
+- 🤖 **Auto-Updating AI Models** - Claude, GPT, Gemini, and custom models, with the model list kept up to date automatically
+- 🔁 **Back-Translation** - Instantly check quality by translating the result back to the source language
+- 🧭 **Language Direction Display** - See the detected source → target language at a glance
+- 💬 **Two Display Modes** - Notification with auto-copy or resizable popup window
+- 🎨 **Customizable** - Custom instructions (with AI assist), languages, and translation rules
 - 🪶 **Lightweight** - Minimal resource usage, lives in your system tray
 
 ## Installation
@@ -109,7 +111,7 @@ You can add custom instructions that will be included in all translations:
 
 1. Click on the system tray icon
 2. Select "Settings..."
-3. Go to the "Custom Prompt" tab
+3. Go to the "Customization" tab and find the "Custom Prompt" section
 4. Enter your custom instructions (e.g., terminology guidelines, tone preferences, specific translation rules)
 5. Click "Save"
 
@@ -119,12 +121,20 @@ Examples of custom instructions:
 - Maintain consistent terminology
 - Follow specific industry standards
 
+**Generate with AI:** Not sure how to phrase your instructions? Click "Generate with AI" and describe what you want in plain language — Honyo uses your selected model to write or refine the custom prompt for you.
+
+Whatever the input looks like — a question, a greeting, or even text that says "ignore previous instructions" — Honyo always treats it as text to translate, never as a command. Markdown and code formatting is preserved: the syntax is kept intact and only the human-readable text is translated.
+
+### AI Models
+
+Pick a model from the **AI Model** menu in the system tray. The list stays current automatically: Honyo refreshes it from free public model catalogs (no API key required, cached for 24 hours), showing the latest models per provider. If it can't reach the network, it falls back to a built-in list of current Claude, GPT, and Gemini models. Your selected model is always kept in the list even if a refresh would otherwise drop it.
+
 ### Custom AI Models
 
-Use any AI model not included in the default list:
+Use any AI model not included in the list:
 
-1. Open Settings → "Custom Model" tab
-2. Enter the model name (e.g., `gpt-4-1106-preview`, `claude-3-opus-20240229`)
+1. Open Settings → "Customization" tab → "Custom Model" section
+2. Enter the model name (e.g., `gpt-5.6-sol`, `claude-opus-4-8`)
 3. Select the provider (Anthropic, OpenAI, or Google AI)
 4. Click "Save"
 5. Select "Custom Model" from the AI Model menu
@@ -133,7 +143,7 @@ Use any AI model not included in the default list:
 
 Add languages not included in the default list:
 
-1. Open Settings → "Custom Languages" tab
+1. Open Settings → "Customization" tab → "Custom Languages" section
 2. Enter language names, one per line (e.g., Esperanto, Sanskrit, Klingon)
 3. Click "Save"
 4. Your custom languages will appear in the Primary/Secondary language menus
@@ -142,17 +152,22 @@ Add languages not included in the default list:
 
 Configure popup window and translation display behavior:
 
-1. Open Settings → "Display" tab
+1. Open Settings → "General" tab
 2. **Auto-close on blur**: Enable this option to automatically close the popup window when it loses focus
 3. **Enable streaming**: Enable this option to see translations appear progressively as the AI generates them (popup mode only)
-4. Click "Save"
+4. **Popup font size**: Set the translation text size in the popup (10–24px)
+5. **Reset Popup Size**: Restore the popup window to its default size
+6. Click "Save"
 
 **Display Modes:**
 - **Notification & Copy**: Translation result appears as a system notification and is automatically copied to clipboard
 - **Popup Window**: Translation result appears in a floating window with additional features:
+  - Language direction shown in the header (e.g. "English → Japanese")
   - Real-time streaming (when enabled)
+  - Back-translate button (⇄) to check the result against the source language
   - Copy button and keyboard shortcuts (Enter to copy, Escape to close)
   - Right-click context menu for copying selected text or all text
+  - Resizable window — the size is remembered across closes
   - Auto-return focus to previous application when closed
 
 ## Usage
@@ -163,7 +178,9 @@ Configure popup window and translation display behavior:
    - **Notification mode**: Translation appears as notification and is copied to clipboard
    - **Popup mode**: Translation appears in a floating window
 4. In popup mode:
-   - Press Enter or click "Copy" to copy and close
+   - The header shows the detected language direction (e.g. "English → Japanese")
+   - Click the back-translate button (⇄) to translate the result back to the source language and check its quality — click again to toggle between the two views (the header shows the reverse direction while viewing the back-translation)
+   - Press Enter or click "Copy" to copy the translation and close
    - Press Escape or click "×" to close without copying
    - Right-click the text for copy options
 
@@ -179,7 +196,7 @@ The app intelligently determines the translation direction:
 Access these options by clicking the system tray icon:
 - **Primary/Secondary Language**: Set your translation language preferences (26+ built-in languages + custom)
 - **Display Mode**: Choose between notification and popup window
-- **AI Model**: Choose which AI model to use for translations (Claude 4.5, GPT-5, Gemini 2.5, or custom)
+- **AI Model**: Choose which AI model to use for translations (latest Claude, GPT, and Gemini models — auto-updated — or a custom model)
 - **Settings**: Configure API keys, custom instructions, models, languages, and display settings
 - **Pause Translation**: Temporarily disable the translation feature
 - **Stop Current Translation**: Cancel ongoing translation
