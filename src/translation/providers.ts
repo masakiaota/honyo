@@ -2,7 +2,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
-import { AI_MODELS, CUSTOM_MODEL_ID } from '../models.ts';
+import { CUSTOM_MODEL_ID } from '../models.ts';
+import { getModelInfo } from '../models-remote.ts';
 import type { ApiKeys, CustomModel } from '../config/types.ts';
 
 export function getAIProvider(
@@ -32,7 +33,7 @@ export function getAIProvider(
     throw new Error('Unknown provider');
   }
 
-  const modelInfo = AI_MODELS[modelId];
+  const modelInfo = getModelInfo(modelId);
   if (!modelInfo) {
     throw new Error(`Unknown model: ${modelId}`);
   }

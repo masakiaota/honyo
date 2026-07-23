@@ -233,6 +233,16 @@
       .modal-cancel-btn:hover {
         background: #d0d0d0;
       }
+      .reset-btn {
+        background: #e0e0e0;
+        color: #333;
+        padding: 6px 14px;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .reset-btn:hover {
+        background: #d0d0d0;
+      }
     </style>
   </head>
   <body>
@@ -386,6 +396,26 @@ Ancient Greek"
             mode only).
           </div>
 
+          <div class="form-group" style="margin-top: 20px">
+            <label for="popup-font-size">Popup Font Size (px)</label>
+            <input
+              type="number"
+              id="popup-font-size"
+              min="10"
+              max="24"
+              step="1"
+              style="width: 120px"
+            />
+            <div class="help-text">Font size for translation text in the popup window (10-24).</div>
+          </div>
+
+          <div class="form-group">
+            <button class="reset-btn" id="reset-popup-size-btn" onclick="resetPopupSize()">
+              Reset Popup Size
+            </button>
+            <div class="help-text">Restore the popup window to its default size (400×200).</div>
+          </div>
+
           <div class="checkbox-group" style="margin-top: 20px">
             <input type="checkbox" id="open-at-login" />
             <label for="open-at-login" class="checkbox-label"> Launch Honyo at login </label>
@@ -480,6 +510,9 @@ For example:
         document
           .getElementById('enable-streaming')
           .addEventListener('change', () => (pendingChanges.display = true));
+        document
+          .getElementById('popup-font-size')
+          .addEventListener('input', () => (pendingChanges.display = true));
         document
           .getElementById('open-at-login')
           .addEventListener('change', () => saveOpenAtLogin());
@@ -589,6 +622,10 @@ For example:
         document.getElementById('enable-streaming').checked = enableStreaming;
       });
 
+      ipcRenderer.on('popup-font-size-loaded', (event, popupFontSize) => {
+        document.getElementById('popup-font-size').value = popupFontSize;
+      });
+
       ipcRenderer.on('open-at-login-loaded', (event, openAtLogin) => {
         document.getElementById('open-at-login').checked = openAtLogin;
       });
@@ -609,7 +646,15 @@ For example:
       function saveDisplaySettings() {
         const autoCloseOnBlur = document.getElementById('auto-close-on-blur').checked;
         const enableStreaming = document.getElementById('enable-streaming').checked;
-        ipcRenderer.send('save-display-settings', { autoCloseOnBlur, enableStreaming });
+        let popupFontSize = parseInt(document.getElementById('popup-font-size').value, 10);
+        if (Number.isNaN(popupFontSize)) popupFontSize = 14;
+        popupFontSize = Math.min(24, Math.max(10, popupFontSize));
+        document.getElementById('popup-font-size').value = popupFontSize;
+        ipcRenderer.send('save-display-settings', {
+          autoCloseOnBlur,
+          enableStreaming,
+          popupFontSize,
+        });
       }
 
       ipcRenderer.on('display-settings-saved', (event, success) => {
@@ -618,6 +663,18 @@ For example:
           showStatus('Display settings saved successfully!', false);
         } else {
           showStatus('Failed to save display settings. Please try again.', true);
+        }
+      });
+
+      function resetPopupSize() {
+        ipcRenderer.send('reset-popup-size');
+      }
+
+      ipcRenderer.on('popup-size-reset', (event, success) => {
+        if (success) {
+          showStatus('Popup size reset to default (400×200).', false);
+        } else {
+          showStatus('Failed to reset popup size. Please try again.', true);
         }
       });
 

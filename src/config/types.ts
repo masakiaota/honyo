@@ -24,6 +24,8 @@ export interface Config {
   skippedUpdateVersion?: string;
   enableStreaming?: boolean;
   openAtLogin?: boolean;
+  popupFontSize?: number;
+  popupSize?: { width: number; height: number };
 }
 
 export interface SavedConfig extends Config {

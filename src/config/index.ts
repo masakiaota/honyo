@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { config as loadEnv } from 'dotenv';
-import { DEFAULT_AI_MODEL, AI_MODELS } from '../models.ts';
+import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
+import { getModelInfo } from '../models-remote.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
 import {
@@ -46,6 +47,7 @@ function getDefaultConfig(): Config {
     enableStreaming: true,
     customPrompt: '',
     displayMode: 'notification',
+    popupFontSize: 14,
   };
 }
 
@@ -60,8 +62,8 @@ export function initializeConfig(): void {
     config.secondaryLanguage = newDefaultConfig.secondaryLanguage;
   }
 
-  // Validate AI model exists
-  if (!AI_MODELS[config.aiModel]) {
+  // Validate AI model exists (custom model is always allowed)
+  if (config.aiModel !== CUSTOM_MODEL_ID && !getModelInfo(config.aiModel)) {
     console.log(`Invalid AI model: ${config.aiModel}, resetting to default`);
     config.aiModel = DEFAULT_AI_MODEL;
   }
@@ -86,6 +88,11 @@ export function initializeConfig(): void {
     config.enableStreaming = true;
   }
 
+  // Initialize popupFontSize if not present
+  if (config.popupFontSize === undefined) {
+    config.popupFontSize = 14;
+  }
+
   // Restore isPaused state
   if (typeof config.isPaused === 'boolean') {
     isPaused = config.isPaused;
@@ -101,6 +108,12 @@ export function getConfig(): Config {
 
 export function updateConfig(updates: Partial<Config>): void {
   config = { ...config, ...updates };
+  saveConfig();
+}
+
+// Clear the persisted popup size so the next popup uses the default 400x200.
+export function clearPopupSize(): void {
+  delete config.popupSize;
   saveConfig();
 }
 

@@ -7,11 +7,15 @@ import {
   updateApiKeys,
   getConfig,
   updateConfig,
+  clearPopupSize,
   type ApiKeys,
+  type Config,
   type CustomModel,
 } from '../config/index.ts';
+import { resetPopupSize } from './popup.ts';
 import { getAIProvider } from '../translation/providers.ts';
-import { AI_MODELS, CUSTOM_MODEL_ID } from '../models.ts';
+import { CUSTOM_MODEL_ID } from '../models.ts';
+import { getModelInfo, refreshModels } from '../models-remote.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -49,6 +53,10 @@ export function openSettingsWindow(): void {
 
   const htmlPath = join(currentDir, '../../settings.html');
   void settingsWindow.loadFile(htmlPath);
+
+  // Refresh the model list when settings open (respects the 24h cache TTL);
+  // rebuilds the tray menu automatically if the list changed.
+  void refreshModels();
 
   settingsWindow.on('closed', () => {
     settingsWindow = null;
@@ -99,6 +107,7 @@ export function setupSettingsIPC(): void {
     const config = getConfig();
     event.reply('auto-close-on-blur-loaded', config.autoCloseOnBlur ?? true);
     event.reply('enable-streaming-loaded', config.enableStreaming ?? true);
+    event.reply('popup-font-size-loaded', config.popupFontSize ?? 14);
   });
 
   ipcMain.on('save-auto-close-on-blur', (event, autoCloseOnBlur: boolean) => {
@@ -108,14 +117,28 @@ export function setupSettingsIPC(): void {
 
   ipcMain.on(
     'save-display-settings',
-    (event, settings: { autoCloseOnBlur: boolean; enableStreaming: boolean }) => {
-      updateConfig({
+    (
+      event,
+      settings: { autoCloseOnBlur: boolean; enableStreaming: boolean; popupFontSize?: number },
+    ) => {
+      const updates: Partial<Config> = {
         autoCloseOnBlur: settings.autoCloseOnBlur,
         enableStreaming: settings.enableStreaming,
-      });
+      };
+      if (typeof settings.popupFontSize === 'number' && !Number.isNaN(settings.popupFontSize)) {
+        updates.popupFontSize = Math.min(24, Math.max(10, Math.round(settings.popupFontSize)));
+      }
+      updateConfig(updates);
       event.reply('display-settings-saved', true);
     },
   );
+
+  ipcMain.on('reset-popup-size', event => {
+    clearPopupSize();
+    // Resize the popup immediately if one is currently open.
+    resetPopupSize();
+    event.reply('popup-size-reset', true);
+  });
 
   ipcMain.on('load-open-at-login', event => {
     const loginSettings = app.getLoginItemSettings();
@@ -148,7 +171,7 @@ export function setupSettingsIPC(): void {
             }
             apiKey = apiKeys[config.customModel.provider];
           } else {
-            const modelInfo = AI_MODELS[config.aiModel];
+            const modelInfo = getModelInfo(config.aiModel);
             if (modelInfo) {
               apiKey = apiKeys[modelInfo.provider];
             }

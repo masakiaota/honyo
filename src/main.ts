@@ -1,5 +1,6 @@
 import { app } from 'electron';
-import { initializeConfig } from './config/index.ts';
+import { initializeConfig, getConfig } from './config/index.ts';
+import { loadModelsCache, refreshModels, setSelectedModelProvider } from './models-remote.ts';
 import { createTray, setupSettingsIPC } from './ui/index.ts';
 import { setupKeyboardHandler, startKeyboardListener } from './keyboard/index.ts';
 import {
@@ -39,11 +40,20 @@ function initialize(): void {
     // Initialize configuration
     initializeConfig();
 
+    // Pin the currently-selected model so the model-list cap never drops it
+    setSelectedModelProvider(() => getConfig().aiModel);
+
+    // Load cached model list (synchronous) before building the tray menu
+    loadModelsCache();
+
     // Setup auto-updater
     setupAutoUpdater();
 
     // Create tray icon
     createTray();
+
+    // Refresh the model list in the background; rebuilds the tray menu on change
+    void refreshModels();
 
     // Setup IPC for settings window
     setupSettingsIPC();

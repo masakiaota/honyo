@@ -5,77 +5,57 @@ export interface AIModelInfo {
 }
 
 export const AI_MODELS: Record<string, AIModelInfo> = {
-  // Anthropic Claude models (latest first, Sonnet as default for cost efficiency)
-  'claude-4.5-sonnet': {
+  // Anthropic Claude models (latest first, cost-efficient Sonnet as default)
+  'claude-5-sonnet': {
     provider: 'anthropic',
-    name: 'Claude 4.5 Sonnet',
-    model: 'claude-sonnet-4-5-20250929',
+    name: 'Claude Sonnet 5',
+    model: 'claude-sonnet-5',
   },
-  'claude-4.5-opus': {
+  'claude-5-fable': {
     provider: 'anthropic',
-    name: 'Claude 4.5 Opus',
-    model: 'claude-opus-4-5-20251101',
+    name: 'Claude Fable 5',
+    model: 'claude-fable-5',
+  },
+  'claude-4.8-opus': {
+    provider: 'anthropic',
+    name: 'Claude Opus 4.8',
+    model: 'claude-opus-4-8',
+  },
+  'claude-4.6-sonnet': {
+    provider: 'anthropic',
+    name: 'Claude Sonnet 4.6',
+    model: 'claude-sonnet-4-6',
   },
   'claude-4.5-haiku': {
     provider: 'anthropic',
-    name: 'Claude 4.5 Haiku',
-    model: 'claude-haiku-4-5-20251001',
-  },
-  'claude-4.1-opus': {
-    provider: 'anthropic',
-    name: 'Claude 4.1 Opus',
-    model: 'claude-opus-4-1-20250805',
-  },
-  'claude-4-sonnet': {
-    provider: 'anthropic',
-    name: 'Claude 4 Sonnet',
-    model: 'claude-sonnet-4-20250514',
-  },
-  'claude-4-opus': {
-    provider: 'anthropic',
-    name: 'Claude 4 Opus',
-    model: 'claude-opus-4-20250514',
-  },
-  'claude-3.7-sonnet': {
-    provider: 'anthropic',
-    name: 'Claude 3.7 Sonnet',
-    model: 'claude-3-7-sonnet-20250219',
-  },
-  'claude-3.5-haiku': {
-    provider: 'anthropic',
-    name: 'Claude 3.5 Haiku',
-    model: 'claude-3-5-haiku-20241022',
+    name: 'Claude Haiku 4.5',
+    model: 'claude-haiku-4-5',
   },
   // OpenAI GPT models (latest first)
-  'gpt-5': {
+  'gpt-5.6': {
     provider: 'openai',
-    name: 'GPT-5',
-    model: 'gpt-5',
+    name: 'GPT-5.6 Sol',
+    model: 'gpt-5.6-sol',
   },
-  'gpt-5-mini': {
+  'gpt-5.6-terra': {
     provider: 'openai',
-    name: 'GPT-5 Mini',
-    model: 'gpt-5-mini',
+    name: 'GPT-5.6 Terra',
+    model: 'gpt-5.6-terra',
   },
-  'gpt-5-nano': {
+  'gpt-5.6-luna': {
     provider: 'openai',
-    name: 'GPT-5 Nano',
-    model: 'gpt-5-nano',
+    name: 'GPT-5.6 Luna',
+    model: 'gpt-5.6-luna',
   },
-  'gpt-4.1': {
+  'gpt-5.2-mini': {
     provider: 'openai',
-    name: 'GPT-4.1',
-    model: 'gpt-4.1',
+    name: 'GPT-5.2 Mini',
+    model: 'gpt-5.2-mini',
   },
-  'gpt-4.1-mini': {
+  'gpt-5.2-nano': {
     provider: 'openai',
-    name: 'GPT-4.1 Mini',
-    model: 'gpt-4.1-mini',
-  },
-  'gpt-4.1-nano': {
-    provider: 'openai',
-    name: 'GPT-4.1 Nano',
-    model: 'gpt-4.1-nano',
+    name: 'GPT-5.2 Nano',
+    model: 'gpt-5.2-nano',
   },
   'gpt-4o': {
     provider: 'openai',
@@ -87,41 +67,26 @@ export const AI_MODELS: Record<string, AIModelInfo> = {
     name: 'GPT-4o Mini',
     model: 'gpt-4o-mini',
   },
-  o3: {
-    provider: 'openai',
-    name: 'o3',
-    model: 'o3',
-  },
-  'o3-pro': {
-    provider: 'openai',
-    name: 'o3 Pro',
-    model: 'o3-pro',
-  },
-  'o3-mini': {
-    provider: 'openai',
-    name: 'o3 Mini',
-    model: 'o3-mini',
-  },
-  'o4-mini': {
-    provider: 'openai',
-    name: 'o4 Mini',
-    model: 'o4-mini',
-  },
-  o1: {
-    provider: 'openai',
-    name: 'o1',
-    model: 'o1',
-  },
-  'o1-mini': {
-    provider: 'openai',
-    name: 'o1 Mini',
-    model: 'o1-mini',
-  },
   // Google Gemini models (latest first)
-  'gemini-3.0-pro': {
+  'gemini-3.6-flash': {
     provider: 'google',
-    name: 'Gemini 3.0 Pro (Preview)',
-    model: 'gemini-3-pro-preview',
+    name: 'Gemini 3.6 Flash',
+    model: 'gemini-3.6-flash',
+  },
+  'gemini-3.5-flash': {
+    provider: 'google',
+    name: 'Gemini 3.5 Flash',
+    model: 'gemini-3.5-flash',
+  },
+  'gemini-3.5-flash-lite': {
+    provider: 'google',
+    name: 'Gemini 3.5 Flash-Lite',
+    model: 'gemini-3.5-flash-lite',
+  },
+  'gemini-3.1-pro-preview': {
+    provider: 'google',
+    name: 'Gemini 3.1 Pro (Preview)',
+    model: 'gemini-3.1-pro-preview',
   },
   'gemini-2.5-pro': {
     provider: 'google',
@@ -133,27 +98,7 @@ export const AI_MODELS: Record<string, AIModelInfo> = {
     name: 'Gemini 2.5 Flash',
     model: 'gemini-2.5-flash',
   },
-  'gemini-2.5-flash-lite': {
-    provider: 'google',
-    name: 'Gemini 2.5 Flash-Lite',
-    model: 'gemini-2.5-flash-lite',
-  },
-  'gemini-2.0-flash': {
-    provider: 'google',
-    name: 'Gemini 2.0 Flash',
-    model: 'gemini-2.0-flash',
-  },
-  'gemini-1.5-flash': {
-    provider: 'google',
-    name: 'Gemini 1.5 Flash',
-    model: 'gemini-1.5-flash',
-  },
-  'gemini-1.5-pro': {
-    provider: 'google',
-    name: 'Gemini 1.5 Pro',
-    model: 'gemini-1.5-pro',
-  },
 };
 
-export const DEFAULT_AI_MODEL = Object.keys(AI_MODELS)[0] ?? 'claude-3.5-haiku';
+export const DEFAULT_AI_MODEL = Object.keys(AI_MODELS)[0] ?? 'claude-5-sonnet';
 export const CUSTOM_MODEL_ID = 'custom-model';

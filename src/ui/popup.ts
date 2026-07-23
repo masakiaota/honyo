@@ -3,7 +3,13 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { cancelCurrentTranslation } from '../keyboard/handler.ts';
-import { getConfig } from '../config/index.ts';
+import { getConfig, updateConfig } from '../config/index.ts';
+import { translateTextStrict } from '../translation/index.ts';
+
+const DEFAULT_POPUP_WIDTH = 400;
+const DEFAULT_POPUP_HEIGHT = 200;
+const MIN_POPUP_WIDTH = 280;
+const MIN_POPUP_HEIGHT = 160;
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -20,6 +26,47 @@ const currentDir = getCurrentDir();
 
 let popupWindow: BrowserWindow | null = null;
 let previousActiveApp: string | null = null;
+
+// Send the current popup display config (read fresh so settings changes apply to
+// the next popup without a restart).
+function sendPopupConfig(): void {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  const config = getConfig();
+  popupWindow.webContents.send('popup-config', {
+    fontSize: config.popupFontSize ?? 14,
+  });
+}
+
+// Resolve the initial popup size from config (persisted size, or the default),
+// clamped to the minimum and the display work area.
+function getInitialPopupSize(cursorPoint: { x: number; y: number }): {
+  width: number;
+  height: number;
+} {
+  const { popupSize } = getConfig();
+  let width = popupSize?.width ?? DEFAULT_POPUP_WIDTH;
+  let height = popupSize?.height ?? DEFAULT_POPUP_HEIGHT;
+
+  const workArea = screen.getDisplayNearestPoint(cursorPoint).workAreaSize;
+  width = Math.max(MIN_POPUP_WIDTH, Math.min(width, workArea.width));
+  height = Math.max(MIN_POPUP_HEIGHT, Math.min(height, workArea.height));
+
+  return { width, height };
+}
+
+// Persist the current popup size (fired once per manual resize via 'resized').
+function savePopupSize(): void {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  const [width = DEFAULT_POPUP_WIDTH, height = DEFAULT_POPUP_HEIGHT] = popupWindow.getSize();
+  updateConfig({ popupSize: { width, height } });
+}
+
+// Reset an open popup window to the default size (used by the settings reset).
+export function resetPopupSize(): void {
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.setSize(DEFAULT_POPUP_WIDTH, DEFAULT_POPUP_HEIGHT);
+  }
+}
 
 // Function to get the currently active application
 function capturePreviousApp(): void {
@@ -61,6 +108,9 @@ export function showTranslationPopup(translation: string | null, originalText: s
 
   // If popup exists, update content without repositioning
   if (popupWindow && !popupWindow.isDestroyed()) {
+    // Apply current font size before updating content
+    sendPopupConfig();
+
     // Update content
     if (translation === null) {
       popupWindow.webContents.send('translation-loading');
@@ -76,14 +126,17 @@ export function showTranslationPopup(translation: string | null, originalText: s
     return;
   }
 
-  // Create popup window
+  // Create popup window (using the persisted size when available)
+  const initialSize = getInitialPopupSize(cursorPoint);
   popupWindow = new BrowserWindow({
-    width: 400,
-    height: 200,
+    width: initialSize.width,
+    height: initialSize.height,
+    minWidth: MIN_POPUP_WIDTH,
+    minHeight: MIN_POPUP_HEIGHT,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    resizable: false,
+    resizable: true,
     movable: true,
     minimizable: false,
     maximizable: false,
@@ -98,6 +151,9 @@ export function showTranslationPopup(translation: string | null, originalText: s
   // Ensure window stays on top
   popupWindow.setAlwaysOnTop(true, 'floating');
 
+  // Persist the size after a manual resize (fires once per drag on macOS)
+  popupWindow.on('resized', savePopupSize);
+
   // Position the window
   repositionPopup(cursorPoint);
 
@@ -107,6 +163,7 @@ export function showTranslationPopup(translation: string | null, originalText: s
 
   // Send initial state once loaded
   popupWindow.webContents.once('did-finish-load', () => {
+    sendPopupConfig();
     if (translation === null) {
       popupWindow?.webContents.send('translation-loading');
     } else {
@@ -162,6 +219,31 @@ export function setupPopupIPC(): void {
     }
   });
 
+  ipcMain.on('back-translate', (event, text: string) => {
+    void (async (): Promise<void> => {
+      if (!popupWindow || popupWindow.isDestroyed() || !text) return;
+      try {
+        const config = getConfig();
+        // The language-detection rules translate the translation back to the
+        // source language automatically.
+        const result = await translateTextStrict(
+          text,
+          config.targetLanguage,
+          config.secondaryLanguage,
+        );
+        if (!popupWindow || popupWindow.isDestroyed()) return;
+        popupWindow.webContents.send('back-translation-result', result);
+      } catch (error) {
+        if (popupWindow && !popupWindow.isDestroyed()) {
+          popupWindow.webContents.send(
+            'back-translation-error',
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+      }
+    })();
+  });
+
   ipcMain.on(
     'show-context-menu',
     (event, data: { selectedText: string; hasSelection: boolean }) => {
@@ -203,10 +285,8 @@ export function closePopup(): void {
 function repositionPopup(cursorPoint: { x: number; y: number }): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
 
-  const windowBounds = {
-    width: 400,
-    height: 200,
-  };
+  const [width = DEFAULT_POPUP_WIDTH, height = DEFAULT_POPUP_HEIGHT] = popupWindow.getSize();
+  const windowBounds = { width, height };
 
   // Get all displays to handle multi-monitor setups
   const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);

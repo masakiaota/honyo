@@ -2,6 +2,7 @@ import { Tray } from 'electron';
 import { createNormalIcon, createTranslatingIcon } from './icons.ts';
 import { createTrayMenu } from './menu.ts';
 import { setMenuUpdateCallback } from '../app/updater.ts';
+import { setModelsChangedCallback } from '../models-remote.ts';
 
 let tray: Tray | null = null;
 let normalIcon: Electron.NativeImage | null = null;
@@ -27,6 +28,9 @@ export function createTray(): Tray {
 
   // Register menu update callback for updater
   setMenuUpdateCallback(updateMenu);
+
+  // Rebuild the menu when the fetched model list changes
+  setModelsChangedCallback(updateMenu);
 
   // Create initial menu
   updateMenu();

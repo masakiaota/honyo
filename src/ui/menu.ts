@@ -5,7 +5,8 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { languages } from '../language/index.ts';
-import { AI_MODELS, CUSTOM_MODEL_ID, type AIModelInfo } from '../models.ts';
+import { CUSTOM_MODEL_ID, type AIModelInfo } from '../models.ts';
+import { getAvailableModels, getModelInfo } from '../models-remote.ts';
 import { getConfig, updateConfig, getPausedState, setPausedState } from '../config/index.ts';
 import { openSettingsWindow } from './settings.ts';
 import {
@@ -125,7 +126,7 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
       label: `AI Model: ${
         config.aiModel === CUSTOM_MODEL_ID
           ? 'Custom Model'
-          : (AI_MODELS[config.aiModel]?.name ?? 'Unknown')
+          : (getModelInfo(config.aiModel)?.name ?? 'Unknown')
       }`,
       submenu: ((): Array<
         | { label: string; type: 'radio'; checked: boolean; click: () => void }
@@ -147,7 +148,7 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
           google: [],
         };
 
-        for (const [modelId, modelInfo] of Object.entries(AI_MODELS)) {
+        for (const [modelId, modelInfo] of Object.entries(getAvailableModels())) {
           modelsByProvider[modelInfo.provider].push([modelId, modelInfo]);
         }
 

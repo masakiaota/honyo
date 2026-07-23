@@ -147,6 +147,50 @@
         cursor: not-allowed;
         opacity: 0.6;
       }
+      .back-btn {
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        transition:
+          color 0.2s,
+          background-color 0.2s;
+      }
+      .back-btn:hover:not(:disabled) {
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+      }
+      .back-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      /* Back translation section */
+      .back-section {
+        display: none;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border-color);
+      }
+      .back-section.active {
+        display: block;
+      }
+      .back-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+      .back-translation-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-secondary);
+        word-wrap: break-word;
+        white-space: pre-wrap;
+      }
+      .back-translation-text.error {
+        font-style: italic;
+      }
       /* Custom scrollbar */
       .content::-webkit-scrollbar {
         width: 6px;
@@ -206,6 +250,15 @@
           Honyo Translator
         </span>
         <div class="header-buttons">
+          <button
+            class="back-btn header-btn"
+            id="back-btn"
+            onclick="backTranslate()"
+            title="Translate the result back to the source language"
+            disabled
+          >
+            Back-translate
+          </button>
           <button class="copy-btn header-btn" onclick="copyTranslation()">Copy</button>
           <button class="close-btn" onclick="closePopup()">×</button>
         </div>
@@ -215,12 +268,44 @@
           <div class="spinner"></div>
         </div>
         <div class="translation-text" id="translation-text" style="display: none"></div>
+        <div class="back-section" id="back-section">
+          <div class="back-label">Back translation</div>
+          <div class="back-translation-text" id="back-translation-text"></div>
+        </div>
       </div>
     </div>
 
     <script>
       const { ipcRenderer } = require('electron');
       let currentTranslation = '';
+      let currentFontSize = 14;
+
+      function applyFontSize(size) {
+        currentFontSize = size;
+        document.getElementById('translation-text').style.fontSize = size + 'px';
+        document.getElementById('back-translation-text').style.fontSize = size + 'px';
+      }
+
+      // Receive popup display config (font size)
+      ipcRenderer.on('popup-config', (event, cfg) => {
+        const size = cfg && typeof cfg.fontSize === 'number' ? cfg.fontSize : 14;
+        applyFontSize(size);
+      });
+
+      // Back-translation section helpers
+      function resetBackSection() {
+        const section = document.getElementById('back-section');
+        section.classList.remove('active');
+        const text = document.getElementById('back-translation-text');
+        text.classList.remove('error');
+        text.textContent = '';
+        const btn = document.getElementById('back-btn');
+        btn.textContent = 'Back-translate';
+      }
+
+      function setBackButtonEnabled(enabled) {
+        document.getElementById('back-btn').disabled = !enabled;
+      }
 
       // Context menu for translation text
       function showContextMenu(e) {
@@ -237,9 +322,12 @@
 
       // Show loading state
       ipcRenderer.on('translation-loading', () => {
+        currentTranslation = '';
         document.getElementById('spinner-container').classList.add('active');
         document.getElementById('translation-text').style.display = 'none';
         document.querySelector('.copy-btn').disabled = true;
+        resetBackSection();
+        setBackButtonEnabled(false);
       });
 
       // Receive translation data
@@ -249,6 +337,8 @@
         document.getElementById('translation-text').style.display = 'block';
         document.getElementById('translation-text').textContent = currentTranslation;
         document.querySelector('.copy-btn').disabled = false;
+        resetBackSection();
+        setBackButtonEnabled(!!currentTranslation);
       });
 
       // Receive streaming chunks (keep button disabled during streaming)
@@ -259,8 +349,10 @@
         document.getElementById('spinner-container').classList.remove('active');
         document.getElementById('translation-text').style.display = 'block';
         document.getElementById('translation-text').textContent = text;
-        // Keep button disabled until streaming completes
+        // Keep buttons disabled until streaming completes
         document.querySelector('.copy-btn').disabled = true;
+        resetBackSection();
+        setBackButtonEnabled(false);
       });
 
       // Receive streaming completion
@@ -269,6 +361,40 @@
         currentTranslation = text;
         document.getElementById('translation-text').textContent = text;
         document.querySelector('.copy-btn').disabled = false;
+        setBackButtonEnabled(!!currentTranslation);
+      });
+
+      // Back-translation
+      function backTranslate() {
+        if (!currentTranslation || isStreaming) return;
+        const btn = document.getElementById('back-btn');
+        btn.disabled = true;
+        btn.textContent = '...';
+        const text = document.getElementById('back-translation-text');
+        text.classList.remove('error');
+        text.textContent = 'Translating…';
+        document.getElementById('back-section').classList.add('active');
+        ipcRenderer.send('back-translate', currentTranslation);
+      }
+
+      ipcRenderer.on('back-translation-result', (event, result) => {
+        const text = document.getElementById('back-translation-text');
+        text.classList.remove('error');
+        text.textContent = result;
+        document.getElementById('back-section').classList.add('active');
+        const btn = document.getElementById('back-btn');
+        btn.textContent = 'Back-translate';
+        btn.disabled = !currentTranslation || isStreaming;
+      });
+
+      ipcRenderer.on('back-translation-error', (event, message) => {
+        const text = document.getElementById('back-translation-text');
+        text.classList.add('error');
+        text.textContent = message || 'Back translation failed';
+        document.getElementById('back-section').classList.add('active');
+        const btn = document.getElementById('back-btn');
+        btn.textContent = 'Back-translate';
+        btn.disabled = !currentTranslation || isStreaming;
       });
 
       function copyTranslation() {
