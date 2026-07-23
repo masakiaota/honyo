@@ -10,13 +10,17 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # Keep building the other platforms when one fails
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             arch: x64
           - os: macos-latest
             arch: arm64
-          - os: windows-latest
+          # Pinned to windows-2022: the windows-latest image ships Visual
+          # Studio 18, which node-gyp cannot use to rebuild uiohook-napi
+          - os: windows-2022
             arch: x64
           - os: ubuntu-latest
             arch: x64
@@ -119,7 +123,7 @@ jobs:
         files: |
           macos-latest-x64-build/*
           macos-latest-arm64-build/*
-          windows-latest-x64-build/*
+          windows-2022-x64-build/*
           ubuntu-latest-x64-build/*
         draft: false
         prerelease: false
