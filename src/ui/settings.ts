@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, app } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { generateText } from 'ai';
 import {
   getApiKeys,
   updateApiKeys,
@@ -9,6 +10,8 @@ import {
   type ApiKeys,
   type CustomModel,
 } from '../config/index.ts';
+import { getAIProvider } from '../translation/providers.ts';
+import { AI_MODELS, CUSTOM_MODEL_ID } from '../models.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -124,4 +127,76 @@ export function setupSettingsIPC(): void {
     updateConfig({ openAtLogin });
     event.reply('open-at-login-saved', true);
   });
+
+  ipcMain.on(
+    'generate-custom-prompt',
+    (event, data: { currentPrompt: string; instruction: string }) => {
+      void (async (): Promise<void> => {
+        try {
+          const config = getConfig();
+          const apiKeys = getApiKeys();
+
+          // Validate API key
+          let apiKey: string | undefined;
+          if (config.aiModel === CUSTOM_MODEL_ID) {
+            if (!config.customModel?.provider) {
+              event.reply('custom-prompt-generated', {
+                success: false,
+                error: 'Custom model not configured',
+              });
+              return;
+            }
+            apiKey = apiKeys[config.customModel.provider];
+          } else {
+            const modelInfo = AI_MODELS[config.aiModel];
+            if (modelInfo) {
+              apiKey = apiKeys[modelInfo.provider];
+            }
+          }
+
+          if (!apiKey) {
+            event.reply('custom-prompt-generated', {
+              success: false,
+              error: 'API key not configured',
+            });
+            return;
+          }
+
+          const model = getAIProvider(config.aiModel, apiKeys, config.customModel);
+
+          const systemPrompt = `You are an expert at writing translation instruction prompts.
+Your task is to generate or modify a custom prompt that will be used to guide AI translations.
+
+Rules:
+1. Output ONLY the custom prompt text, no explanations or meta-commentary
+2. Write the prompt in English for best results
+3. Keep instructions clear, concise, and actionable
+4. Focus on translation style, tone, terminology preferences, etc.
+5. If there's an existing prompt, improve or modify it based on the user's request
+6. If no existing prompt, create a new one based on the user's request`;
+
+          const userPrompt = data.currentPrompt
+            ? `Current custom prompt:\n${data.currentPrompt}\n\nUser's request: ${data.instruction}`
+            : `User's request: ${data.instruction}`;
+
+          const { text } = await generateText({
+            model,
+            system: systemPrompt,
+            prompt: userPrompt,
+          });
+
+          event.reply('custom-prompt-generated', {
+            success: true,
+            prompt: text.trim(),
+          });
+        } catch (error) {
+          console.error('Failed to generate custom prompt:', error);
+          event.reply('custom-prompt-generated', {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      })();
+    },
+  );
 }

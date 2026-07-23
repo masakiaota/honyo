@@ -181,6 +181,58 @@
         user-select: none;
         font-weight: normal;
       }
+      .generate-btn {
+        background: #6c5ce7;
+        color: white;
+        margin-top: 10px;
+      }
+      .generate-btn:hover {
+        background: #5b4cdb;
+      }
+      .generate-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      }
+      .modal h3 {
+        margin-top: 0;
+        color: #333;
+      }
+      .modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .modal-cancel-btn {
+        background: #e0e0e0;
+        color: #333;
+      }
+      .modal-cancel-btn:hover {
+        background: #d0d0d0;
+      }
     </style>
   </head>
   <body>
@@ -251,6 +303,9 @@ For example:
             <div class="help-text">
               These instructions will be added to every translation request.
             </div>
+            <button class="generate-btn" id="generate-prompt-btn" onclick="openGenerateModal()">
+              Generate with AI
+            </button>
           </div>
 
           <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0" />
@@ -340,6 +395,30 @@ Ancient Greek"
           </div>
 
           <div class="status" id="general-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="generate-modal">
+      <div class="modal">
+        <h3>Generate Custom Prompt with AI</h3>
+        <div class="form-group">
+          <label for="generate-instruction">How would you like to modify the prompt?</label>
+          <textarea
+            id="generate-instruction"
+            style="min-height: 100px"
+            placeholder="Describe the changes you want...
+For example:
+- Make translations more casual
+- Add instructions to preserve technical terms
+- Focus on business/formal tone"
+          ></textarea>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-cancel-btn" onclick="closeGenerateModal()">Cancel</button>
+          <button class="generate-btn" id="modal-generate-btn" onclick="generatePrompt()">
+            Generate
+          </button>
         </div>
       </div>
     </div>
@@ -577,6 +656,53 @@ Ancient Greek"
           saveBtn.disabled = false;
         }, 1000);
       }
+
+      // Generate prompt modal functions
+      function openGenerateModal() {
+        document.getElementById('generate-modal').classList.add('active');
+        document.getElementById('generate-instruction').value = '';
+        document.getElementById('generate-instruction').focus();
+      }
+
+      function closeGenerateModal() {
+        document.getElementById('generate-modal').classList.remove('active');
+      }
+
+      function generatePrompt() {
+        const instruction = document.getElementById('generate-instruction').value.trim();
+        if (!instruction) {
+          alert('Please enter instructions for how to modify the prompt.');
+          return;
+        }
+
+        const currentPrompt = document.getElementById('custom-prompt-input').value.trim();
+        const generateBtn = document.getElementById('modal-generate-btn');
+        const mainGenerateBtn = document.getElementById('generate-prompt-btn');
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+        mainGenerateBtn.disabled = true;
+
+        ipcRenderer.send('generate-custom-prompt', { currentPrompt, instruction });
+      }
+
+      ipcRenderer.on('custom-prompt-generated', (event, result) => {
+        const generateBtn = document.getElementById('modal-generate-btn');
+        const mainGenerateBtn = document.getElementById('generate-prompt-btn');
+
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate';
+        mainGenerateBtn.disabled = false;
+
+        if (result.success) {
+          document.getElementById('custom-prompt-input').value = result.prompt;
+          pendingChanges.customPrompt = true;
+          closeGenerateModal();
+          showStatus('Custom prompt generated! Click Save to apply.', false);
+        } else {
+          alert('Failed to generate prompt: ' + result.error);
+        }
+      });
 
       // Status display function
       function showStatus(message, isError) {
