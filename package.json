@@ -83,7 +83,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "rot1024",
+      "owner": "eukarya-inc",
       "repo": "honyo"
     },
     "files": [
