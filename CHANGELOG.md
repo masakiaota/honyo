@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.6.0](https://github.com/rot1024/honyo/compare/v0.5.0...v0.6.0) (2026-07-23)
+
+
+### Features
+
+* add AI-assisted custom prompt generation in settings ([ff2b1d4](https://github.com/rot1024/honyo/commit/ff2b1d426b227d2fba25da6a5dca47e67f7357b8))
+* add auto-start option for launching Honyo at login ([#4](https://github.com/rot1024/honyo/issues/4)) ([6892685](https://github.com/rot1024/honyo/commit/6892685e8cd84686ef4c5eca5cbb73da3799980f))
+* add language direction display and refine popup UI ([a61abf7](https://github.com/rot1024/honyo/commit/a61abf7256a36b8a06b3054297177a0e153450c7))
+* enable autoCloseOnBlur and streaming by default ([98f223d](https://github.com/rot1024/honyo/commit/98f223d4663885aec41ff19c2996bad7efc91513))
+* refresh model catalog with auto-update, harden prompt, improve popup ([ef0554d](https://github.com/rot1024/honyo/commit/ef0554d2ae939ef9e7a32179ec72dea0138b4e00))
+* show language direction in popup header and simplify captions ([5ec1ac5](https://github.com/rot1024/honyo/commit/5ec1ac503cc29d7011f759761350df54691a24f9))
+
+
+### Code Refactoring
+
+* consolidate customization tabs and rename Anthropic to Claude ([fa3ceb2](https://github.com/rot1024/honyo/commit/fa3ceb2a0c844e44d6b7237ac55e530e570cabd4))
+
+
+### Documentation
+
+* add development documentation to README ([#3](https://github.com/rot1024/honyo/issues/3)) ([1e49040](https://github.com/rot1024/honyo/commit/1e490408191b9fd3e28995e6a571c889d74c23cb))
+* update README with auto-updating models, back-translation, and popup features ([d1d0a2d](https://github.com/rot1024/honyo/commit/d1d0a2daf79ac752f6a74f3a9b5c9f41460fbf87))
+
 ## [0.5.0](https://github.com/rot1024/honyo/compare/v0.4.5...v0.5.0) (2025-11-28)
 
 
