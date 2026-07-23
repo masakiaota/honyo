@@ -1,12 +1,13 @@
 import { clipboard, Notification } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
-import { translateText, translateTextStreaming } from '../translation/index.ts';
+import { translateTextSafe, translateTextStreaming } from '../translation/index.ts';
 import { getConfig, getPausedState } from '../config/index.ts';
 import { setTrayIcon } from '../ui/tray.ts';
 import {
   showTranslationPopup,
   closePopup,
   updatePopupTranslation,
+  updatePopupLanguages,
   finalizePopupTranslation,
 } from '../ui/popup.ts';
 
@@ -72,6 +73,9 @@ export function setupKeyboardHandler(): void {
             }
 
             let translation: string;
+            // Detected language pair (non-streaming path); streaming emits it
+            // via the onLanguages callback below.
+            let detectedLanguages: { source: string; target: string } | null = null;
 
             // Use streaming for popup mode if enabled
             if (config.displayMode === 'popup' && config.enableStreaming) {
@@ -83,16 +87,26 @@ export function setupKeyboardHandler(): void {
                   updatePopupTranslation(chunk);
                 },
                 signal,
+                (source: string, target: string) => {
+                  updatePopupLanguages(source, target);
+                },
               );
               // Notify that streaming is complete
               finalizePopupTranslation(translation);
             } else {
-              translation = await translateText(
+              const result = await translateTextSafe(
                 text,
                 config.targetLanguage,
                 config.secondaryLanguage,
                 signal,
               );
+              translation = result.translation;
+              if (result.sourceLanguage && result.targetLanguage) {
+                detectedLanguages = {
+                  source: result.sourceLanguage,
+                  target: result.targetLanguage,
+                };
+              }
             }
 
             // Handle display mode
@@ -100,6 +114,9 @@ export function setupKeyboardHandler(): void {
               // Update popup window with final translation (in case streaming didn't run)
               if (!config.enableStreaming) {
                 showTranslationPopup(translation, text);
+                if (detectedLanguages) {
+                  updatePopupLanguages(detectedLanguages.source, detectedLanguages.target);
+                }
               }
             } else {
               // Notification mode: copy to clipboard and show notification

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { cancelCurrentTranslation } from '../keyboard/handler.ts';
 import { getConfig, updateConfig } from '../config/index.ts';
-import { translateTextStrict } from '../translation/index.ts';
+import { translateTextDetailed } from '../translation/index.ts';
 
 const DEFAULT_POPUP_WIDTH = 400;
 const DEFAULT_POPUP_HEIGHT = 200;
@@ -26,6 +26,10 @@ const currentDir = getCurrentDir();
 
 let popupWindow: BrowserWindow | null = null;
 let previousActiveApp: string | null = null;
+// Language pair of the current translation. Kept here because it can be
+// resolved while a freshly-created popup window is still loading — IPC sent
+// before did-finish-load is dropped, so it is re-sent once the page is ready.
+let pendingLanguages: { sourceLanguage: string; targetLanguage: string } | null = null;
 
 // Send the current popup display config (read fresh so settings changes apply to
 // the next popup without a restart).
@@ -98,6 +102,9 @@ function restorePreviousApp(): void {
 }
 
 export function showTranslationPopup(translation: string | null, originalText: string): void {
+  // A new translation cycle starts: its language pair is not known yet.
+  pendingLanguages = null;
+
   // Get cursor position with DPI scaling consideration
   const cursorPoint = screen.getCursorScreenPoint();
 
@@ -172,6 +179,11 @@ export function showTranslationPopup(translation: string | null, originalText: s
         originalText,
       });
     }
+    // Re-deliver the language pair if it resolved while the page was loading
+    // (IPC sent before did-finish-load is dropped).
+    if (pendingLanguages) {
+      popupWindow?.webContents.send('translation-langs', pendingLanguages);
+    }
   });
 
   // Add blur event handler based on user preference
@@ -194,6 +206,13 @@ export function showTranslationPopup(translation: string | null, originalText: s
 export function updatePopupTranslation(text: string): void {
   if (popupWindow && !popupWindow.isDestroyed()) {
     popupWindow.webContents.send('translation-chunk', text);
+  }
+}
+
+export function updatePopupLanguages(sourceLanguage: string, targetLanguage: string): void {
+  pendingLanguages = { sourceLanguage, targetLanguage };
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.webContents.send('translation-langs', pendingLanguages);
   }
 }
 
@@ -226,13 +245,17 @@ export function setupPopupIPC(): void {
         const config = getConfig();
         // The language-detection rules translate the translation back to the
         // source language automatically.
-        const result = await translateTextStrict(
+        const result = await translateTextDetailed(
           text,
           config.targetLanguage,
           config.secondaryLanguage,
         );
         if (!popupWindow || popupWindow.isDestroyed()) return;
-        popupWindow.webContents.send('back-translation-result', result);
+        popupWindow.webContents.send('back-translation-result', {
+          translation: result.translation,
+          sourceLanguage: result.sourceLanguage,
+          targetLanguage: result.targetLanguage,
+        });
       } catch (error) {
         if (popupWindow && !popupWindow.isDestroyed()) {
           popupWindow.webContents.send(
