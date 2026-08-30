@@ -237,13 +237,26 @@ export function finalizePopupTranslation(text: string): void {
   }
 }
 
+async function writeClipboardText(text: string): Promise<void> {
+  try {
+    await clipboard.writeText(text);
+  } catch (error) {
+    console.error('Failed to copy translation:', error);
+  }
+}
+
 export function setupPopupIPC(): void {
   ipcMain.on('copy-translation', (event, text: string) => {
     if (!isPopupEvent(event)) return;
-    clipboard.writeText(text);
-    if (popupWindow && !popupWindow.isDestroyed()) {
-      popupWindow.close();
-    }
+    void (async (): Promise<void> => {
+      try {
+        await writeClipboardText(text);
+      } finally {
+        if (popupWindow && !popupWindow.isDestroyed()) {
+          popupWindow.close();
+        }
+      }
+    })();
   });
 
   ipcMain.on('close-popup', event => {
@@ -298,7 +311,7 @@ export function setupPopupIPC(): void {
           {
             label: 'Copy',
             click: () => {
-              clipboard.writeText(data.selectedText);
+              void writeClipboardText(data.selectedText);
             },
           },
           { type: 'separator' as const },
