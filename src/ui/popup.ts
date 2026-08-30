@@ -32,7 +32,9 @@ let previousActiveApp: string | null = null;
 let pendingLanguages: { sourceLanguage: string; targetLanguage: string } | null = null;
 
 function getPreloadPath(): string {
-  return join(currentDir, `popup-preload.${app.isPackaged ? 'js' : 'ts'}`);
+  return app.isPackaged
+    ? join(currentDir, 'popup-preload.js')
+    : join(currentDir, '../../build/ui/popup-preload.js');
 }
 
 function isPopupEvent(event: IpcMainEvent): boolean {

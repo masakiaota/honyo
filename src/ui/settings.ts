@@ -39,7 +39,9 @@ const allowedExternalHosts = new Set([
 let settingsWindow: BrowserWindow | null = null;
 
 function getPreloadPath(): string {
-  return join(currentDir, `settings-preload.${app.isPackaged ? 'js' : 'ts'}`);
+  return app.isPackaged
+    ? join(currentDir, 'settings-preload.js')
+    : join(currentDir, '../../build/ui/settings-preload.js');
 }
 
 function isAllowedExternalUrl(url: string): boolean {
