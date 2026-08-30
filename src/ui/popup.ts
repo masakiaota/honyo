@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, ipcMain, clipboard, Menu } from 'electron';
+import { BrowserWindow, screen, ipcMain, clipboard, Menu, app, type IpcMainEvent } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
@@ -30,6 +30,14 @@ let previousActiveApp: string | null = null;
 // resolved while a freshly-created popup window is still loading — IPC sent
 // before did-finish-load is dropped, so it is re-sent once the page is ready.
 let pendingLanguages: { sourceLanguage: string; targetLanguage: string } | null = null;
+
+function getPreloadPath(): string {
+  return join(currentDir, `popup-preload.${app.isPackaged ? 'js' : 'ts'}`);
+}
+
+function isPopupEvent(event: IpcMainEvent): boolean {
+  return event.sender === popupWindow?.webContents;
+}
 
 // Send the current popup display config (read fresh so settings changes apply to
 // the next popup without a restart).
@@ -150,8 +158,10 @@ export function showTranslationPopup(translation: string | null, originalText: s
     skipTaskbar: true,
     hasShadow: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: getPreloadPath(),
     },
   });
 
@@ -167,6 +177,9 @@ export function showTranslationPopup(translation: string | null, originalText: s
   // Load popup HTML
   const htmlPath = join(currentDir, '../../popup.html');
   void popupWindow.loadFile(htmlPath);
+
+  popupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  popupWindow.webContents.on('will-navigate', event => event.preventDefault());
 
   // Send initial state once loaded
   popupWindow.webContents.once('did-finish-load', () => {
@@ -224,13 +237,15 @@ export function finalizePopupTranslation(text: string): void {
 
 export function setupPopupIPC(): void {
   ipcMain.on('copy-translation', (event, text: string) => {
+    if (!isPopupEvent(event)) return;
     clipboard.writeText(text);
     if (popupWindow && !popupWindow.isDestroyed()) {
       popupWindow.close();
     }
   });
 
-  ipcMain.on('close-popup', () => {
+  ipcMain.on('close-popup', event => {
+    if (!isPopupEvent(event)) return;
     // Cancel any ongoing translation when closing popup
     cancelCurrentTranslation();
     if (popupWindow && !popupWindow.isDestroyed()) {
@@ -239,6 +254,7 @@ export function setupPopupIPC(): void {
   });
 
   ipcMain.on('back-translate', (event, text: string) => {
+    if (!isPopupEvent(event)) return;
     void (async (): Promise<void> => {
       if (!popupWindow || popupWindow.isDestroyed() || !text) return;
       try {
@@ -270,6 +286,7 @@ export function setupPopupIPC(): void {
   ipcMain.on(
     'show-context-menu',
     (event, data: { selectedText: string; hasSelection: boolean }) => {
+      if (!isPopupEvent(event)) return;
       if (!popupWindow || popupWindow.isDestroyed()) return;
 
       const template = [];
