@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, app } from 'electron';
+import { BrowserWindow, ipcMain, app, shell, type IpcMainEvent } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { generateText } from 'ai';
@@ -30,7 +30,32 @@ const getCurrentDir = (): string => {
 
 const currentDir = getCurrentDir();
 
+const allowedExternalHosts = new Set([
+  'console.anthropic.com',
+  'platform.openai.com',
+  'makersuite.google.com',
+]);
+
 let settingsWindow: BrowserWindow | null = null;
+
+function getPreloadPath(): string {
+  return app.isPackaged
+    ? join(currentDir, 'settings-preload.js')
+    : join(currentDir, '../../build/ui/settings-preload.js');
+}
+
+function isAllowedExternalUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === 'https:' && allowedExternalHosts.has(parsedUrl.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isSettingsEvent(event: IpcMainEvent): boolean {
+  return event.sender === settingsWindow?.webContents;
+}
 
 export function openSettingsWindow(): void {
   if (settingsWindow) {
@@ -42,8 +67,10 @@ export function openSettingsWindow(): void {
     width: 800,
     height: 600,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: getPreloadPath(),
     },
     resizable: true,
     minimizable: true,
@@ -53,6 +80,20 @@ export function openSettingsWindow(): void {
 
   const htmlPath = join(currentDir, '../../settings.html');
   void settingsWindow.loadFile(htmlPath);
+
+  settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  settingsWindow.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault();
+    if (isAllowedExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
+  });
 
   // Refresh the model list when settings open (respects the 24h cache TTL);
   // rebuilds the tray menu automatically if the list changed.
@@ -65,45 +106,54 @@ export function openSettingsWindow(): void {
 
 export function setupSettingsIPC(): void {
   ipcMain.on('load-api-keys', event => {
+    if (!isSettingsEvent(event)) return;
     event.reply('api-keys-loaded', getApiKeys());
   });
 
   ipcMain.on('save-api-keys', (event, keys: Partial<ApiKeys>) => {
+    if (!isSettingsEvent(event)) return;
     updateApiKeys(keys);
     event.reply('api-keys-saved', true);
   });
 
   ipcMain.on('load-custom-prompt', event => {
+    if (!isSettingsEvent(event)) return;
     const config = getConfig();
     event.reply('custom-prompt-loaded', config.customPrompt);
   });
 
   ipcMain.on('save-custom-prompt', (event, customPrompt: string) => {
+    if (!isSettingsEvent(event)) return;
     updateConfig({ customPrompt });
     event.reply('custom-prompt-saved', true);
   });
 
   ipcMain.on('load-custom-model', event => {
+    if (!isSettingsEvent(event)) return;
     const config = getConfig();
     event.reply('custom-model-loaded', config.customModel);
   });
 
   ipcMain.on('save-custom-model', (event, customModel: CustomModel) => {
+    if (!isSettingsEvent(event)) return;
     updateConfig({ customModel });
     event.reply('custom-model-saved', true);
   });
 
   ipcMain.on('load-custom-languages', event => {
+    if (!isSettingsEvent(event)) return;
     const config = getConfig();
     event.reply('custom-languages-loaded', config.customLanguages || []);
   });
 
   ipcMain.on('save-custom-languages', (event, customLanguages: string[]) => {
+    if (!isSettingsEvent(event)) return;
     updateConfig({ customLanguages });
     event.reply('custom-languages-saved', true);
   });
 
   ipcMain.on('load-auto-close-on-blur', event => {
+    if (!isSettingsEvent(event)) return;
     const config = getConfig();
     event.reply('auto-close-on-blur-loaded', config.autoCloseOnBlur ?? true);
     event.reply('enable-streaming-loaded', config.enableStreaming ?? true);
@@ -111,6 +161,7 @@ export function setupSettingsIPC(): void {
   });
 
   ipcMain.on('save-auto-close-on-blur', (event, autoCloseOnBlur: boolean) => {
+    if (!isSettingsEvent(event)) return;
     updateConfig({ autoCloseOnBlur });
     event.reply('auto-close-on-blur-saved', true);
   });
@@ -121,6 +172,7 @@ export function setupSettingsIPC(): void {
       event,
       settings: { autoCloseOnBlur: boolean; enableStreaming: boolean; popupFontSize?: number },
     ) => {
+      if (!isSettingsEvent(event)) return;
       const updates: Partial<Config> = {
         autoCloseOnBlur: settings.autoCloseOnBlur,
         enableStreaming: settings.enableStreaming,
@@ -134,6 +186,7 @@ export function setupSettingsIPC(): void {
   );
 
   ipcMain.on('reset-popup-size', event => {
+    if (!isSettingsEvent(event)) return;
     clearPopupSize();
     // Resize the popup immediately if one is currently open.
     resetPopupSize();
@@ -141,11 +194,13 @@ export function setupSettingsIPC(): void {
   });
 
   ipcMain.on('load-open-at-login', event => {
+    if (!isSettingsEvent(event)) return;
     const loginSettings = app.getLoginItemSettings();
     event.reply('open-at-login-loaded', loginSettings.openAtLogin);
   });
 
   ipcMain.on('save-open-at-login', (event, openAtLogin: boolean) => {
+    if (!isSettingsEvent(event)) return;
     app.setLoginItemSettings({ openAtLogin });
     updateConfig({ openAtLogin });
     event.reply('open-at-login-saved', true);
@@ -154,6 +209,7 @@ export function setupSettingsIPC(): void {
   ipcMain.on(
     'generate-custom-prompt',
     (event, data: { currentPrompt: string; instruction: string }) => {
+      if (!isSettingsEvent(event)) return;
       void (async (): Promise<void> => {
         try {
           const config = getConfig();

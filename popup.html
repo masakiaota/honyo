@@ -340,7 +340,7 @@
     </div>
 
     <script>
-      const { ipcRenderer } = require('electron');
+      const ipcRenderer = window.honyoPopup;
       let currentTranslation = '';
       let currentFontSize = 14;
       // Back-translation is a view toggle over the same #translation-text element.

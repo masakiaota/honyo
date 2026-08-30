@@ -8,6 +8,7 @@
   },
   "scripts": {
     "_comment": "NOTE: 'build' and 'dist' scripts are temporary until Electron supports Node v24. See scripts/build.ts for details.",
+    "prestart": "npm run build",
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts --cache",
