@@ -16,7 +16,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"*.html\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"*.html\"",
     "test": "vitest",
-    "test:ui": "vitest --ui",
+    "test:ui": "vitest --ui --api.host 127.0.0.1",
     "test:coverage": "vitest --coverage",
     "build": "node scripts/build.ts",
     "build:icons": "node scripts/make-icons.ts",
@@ -48,10 +48,11 @@
     "@types/turndown": "^5.0.5",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
-    "@vitest/ui": "^4.0.14",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "conventional-changelog-cli": "^5.0.0",
-    "electron": "^39.2.4",
-    "electron-builder": "^26.0.12",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.27.0",
     "eslint": "^9.36.0",
     "eslint-plugin-import": "^2.32.0",
@@ -63,7 +64,7 @@
     "standard-version": "^9.5.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.45.0",
-    "vitest": "^4.0.14"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.23",
