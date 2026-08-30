@@ -235,13 +235,24 @@ export function finalizePopupTranslation(text: string): void {
   }
 }
 
+async function writeClipboardText(text: string): Promise<void> {
+  try {
+    await clipboard.writeText(text);
+  } catch (error) {
+    console.error('Failed to copy translation:', error);
+  }
+}
+
 export function setupPopupIPC(): void {
   ipcMain.on('copy-translation', (event, text: string) => {
     if (!isPopupEvent(event)) return;
     void (async (): Promise<void> => {
-      await clipboard.writeText(text);
-      if (popupWindow && !popupWindow.isDestroyed()) {
-        popupWindow.close();
+      try {
+        await writeClipboardText(text);
+      } finally {
+        if (popupWindow && !popupWindow.isDestroyed()) {
+          popupWindow.close();
+        }
       }
     })();
   });
@@ -297,8 +308,8 @@ export function setupPopupIPC(): void {
         template.push(
           {
             label: 'Copy',
-            click: async () => {
-              await clipboard.writeText(data.selectedText);
+            click: () => {
+              void writeClipboardText(data.selectedText);
             },
           },
           { type: 'separator' as const },
