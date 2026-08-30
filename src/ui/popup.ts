@@ -238,10 +238,12 @@ export function finalizePopupTranslation(text: string): void {
 export function setupPopupIPC(): void {
   ipcMain.on('copy-translation', (event, text: string) => {
     if (!isPopupEvent(event)) return;
-    clipboard.writeText(text);
-    if (popupWindow && !popupWindow.isDestroyed()) {
-      popupWindow.close();
-    }
+    void (async (): Promise<void> => {
+      await clipboard.writeText(text);
+      if (popupWindow && !popupWindow.isDestroyed()) {
+        popupWindow.close();
+      }
+    })();
   });
 
   ipcMain.on('close-popup', event => {
@@ -295,8 +297,8 @@ export function setupPopupIPC(): void {
         template.push(
           {
             label: 'Copy',
-            click: () => {
-              clipboard.writeText(data.selectedText);
+            click: async () => {
+              await clipboard.writeText(data.selectedText);
             },
           },
           { type: 'separator' as const },

@@ -50,7 +50,7 @@ export function setupKeyboardHandler(): void {
 
           // Wait for copy to complete
           try {
-            const text = clipboard.readText();
+            const text = await clipboard.readText();
             console.log('Clipboard content:', text ? text.slice(0, 50) + '...' : '(empty)');
 
             if (!text) {
@@ -120,7 +120,7 @@ export function setupKeyboardHandler(): void {
               }
             } else {
               // Notification mode: copy to clipboard and show notification
-              clipboard.writeText(translation);
+              await clipboard.writeText(translation);
               new Notification({
                 title: 'Translation Result',
                 body: translation.length > 100 ? translation.slice(0, 100) + '...' : translation,
