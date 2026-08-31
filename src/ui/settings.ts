@@ -16,6 +16,7 @@ import { resetPopupSize } from './popup.ts';
 import { getAIProvider } from '../translation/providers.ts';
 import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
+import { isValidMaxInputCharacters } from '../input-character-limit.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -179,10 +180,7 @@ export function setupSettingsIPC(): void {
       },
     ) => {
       if (!isSettingsEvent(event)) return;
-      if (
-        !Number.isFinite(settings.maxInputCharacters) ||
-        !Number.isInteger(settings.maxInputCharacters)
-      ) {
+      if (!isValidMaxInputCharacters(settings.maxInputCharacters)) {
         event.reply('display-settings-saved', false);
         return;
       }

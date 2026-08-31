@@ -4,7 +4,10 @@ import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo } from '../models-remote.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
-import { DEFAULT_MAX_INPUT_CHARACTERS } from '../input-character-limit.ts';
+import {
+  DEFAULT_MAX_INPUT_CHARACTERS,
+  isValidMaxInputCharacters,
+} from '../input-character-limit.ts';
 import {
   loadConfigFromFile,
   saveConfigToFile,
@@ -75,7 +78,7 @@ export function initializeConfig(): void {
     config.customPrompt = '';
   }
 
-  if (!Number.isFinite(config.maxInputCharacters) || !Number.isInteger(config.maxInputCharacters)) {
+  if (!isValidMaxInputCharacters(config.maxInputCharacters)) {
     config.maxInputCharacters = DEFAULT_MAX_INPUT_CHARACTERS;
   }
 

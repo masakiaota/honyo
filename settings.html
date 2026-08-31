@@ -411,7 +411,7 @@ Ancient Greek"
 
           <div class="form-group">
             <label for="max-input-characters">Maximum Input Characters</label>
-            <input type="number" id="max-input-characters" step="1" style="width: 120px" />
+            <input type="number" id="max-input-characters" min="1" step="1" style="width: 120px" />
             <div class="help-text">
               Input longer than this limit will not be sent for translation.
             </div>
@@ -666,8 +666,8 @@ For example:
         popupFontSize = Math.min(24, Math.max(10, popupFontSize));
         document.getElementById('popup-font-size').value = popupFontSize;
         const maxInputCharacters = document.getElementById('max-input-characters').valueAsNumber;
-        if (!Number.isFinite(maxInputCharacters) || !Number.isInteger(maxInputCharacters)) {
-          showStatus('Maximum input characters must be a whole number.', true);
+        if (!Number.isSafeInteger(maxInputCharacters) || maxInputCharacters <= 0) {
+          showStatus('Maximum input characters must be a positive whole number.', true);
           return;
         }
         ipcRenderer.send('save-display-settings', {
