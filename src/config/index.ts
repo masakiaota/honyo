@@ -4,6 +4,7 @@ import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo } from '../models-remote.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
+import { DEFAULT_MAX_INPUT_CHARACTERS } from '../input-character-limit.ts';
 import {
   loadConfigFromFile,
   saveConfigToFile,
@@ -46,6 +47,7 @@ function getDefaultConfig(): Config {
     autoCloseOnBlur: true,
     enableStreaming: true,
     customPrompt: '',
+    maxInputCharacters: DEFAULT_MAX_INPUT_CHARACTERS,
     displayMode: 'notification',
     popupFontSize: 14,
   };
@@ -71,6 +73,10 @@ export function initializeConfig(): void {
   // Initialize custom prompt if not present
   if (config.customPrompt === undefined) {
     config.customPrompt = '';
+  }
+
+  if (!Number.isFinite(config.maxInputCharacters) || !Number.isInteger(config.maxInputCharacters)) {
+    config.maxInputCharacters = DEFAULT_MAX_INPUT_CHARACTERS;
   }
 
   // Initialize display mode if not present
