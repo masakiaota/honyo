@@ -11,6 +11,10 @@ export interface CustomModel {
   provider: 'anthropic' | 'openai' | 'google';
 }
 
+export const OPENAI_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type OpenAIReasoningEffort = (typeof OPENAI_REASONING_EFFORTS)[number];
+
 export interface Config {
   targetLanguage: string;
   secondaryLanguage: string;
@@ -21,6 +25,8 @@ export interface Config {
   maxInputCharacters: number;
   displayMode: DisplayMode;
   customModel?: CustomModel;
+  openaiReasoningEfforts?: Partial<Record<string, OpenAIReasoningEffort>>;
+  openaiFastModels?: string[];
   customLanguages?: string[];
   skippedUpdateVersion?: string;
   enableStreaming?: boolean;

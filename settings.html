@@ -249,6 +249,7 @@
     <div class="tabs">
       <div class="tab-group">
         <button class="tab active" onclick="switchTab('api-keys')">API Keys</button>
+        <button class="tab" onclick="switchTab('model')">Model</button>
         <button class="tab" onclick="switchTab('customization')">Customization</button>
         <button class="tab" onclick="switchTab('general')">General</button>
       </div>
@@ -290,6 +291,45 @@
           </div>
 
           <div class="status" id="api-status"></div>
+        </div>
+      </div>
+
+      <div id="model" class="tab-panel">
+        <div class="container">
+          <h2>Model Settings</h2>
+
+          <div class="form-group">
+            <label for="openai-reasoning-effort">Reasoning effort</label>
+            <div class="help-text" id="selected-model-name"></div>
+            <select id="openai-reasoning-effort" disabled>
+              <option value="">Use the model default</option>
+              <option value="none">None — lowest latency</option>
+              <option value="low">Low — faster responses</option>
+              <option value="medium">Medium — balanced</option>
+              <option value="high">High — more reasoning</option>
+              <option value="xhigh">Extra high — more reasoning</option>
+              <option value="max">Max — quality first</option>
+            </select>
+            <div class="help-text" id="openai-reasoning-effort-help">
+              Available for OpenAI GPT-5 and o-series models. The model default is used when no
+              effort is selected.
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <input type="checkbox" id="openai-fast-mode" disabled />
+            <label for="openai-fast-mode" class="checkbox-label">Use Fast mode</label>
+          </div>
+          <div
+            class="help-text"
+            id="openai-fast-mode-help"
+            style="margin-top: -15px; margin-left: 28px"
+          >
+            Sends this GPT-5.6 model through OpenAI's priority processing tier. Fast mode has a
+            higher per-token price.
+          </div>
+
+          <div class="status" id="model-status"></div>
         </div>
       </div>
 
@@ -468,6 +508,8 @@ For example:
         apiKeys: false,
         customPrompt: false,
         customModel: false,
+        reasoningEffort: false,
+        fastMode: false,
         customLanguages: false,
         display: false,
       };
@@ -486,6 +528,7 @@ For example:
         ipcRenderer.send('load-api-keys');
         ipcRenderer.send('load-custom-prompt');
         ipcRenderer.send('load-custom-model');
+        ipcRenderer.send('load-openai-reasoning-effort');
         ipcRenderer.send('load-custom-languages');
         ipcRenderer.send('load-auto-close-on-blur');
         ipcRenderer.send('load-open-at-login');
@@ -509,6 +552,12 @@ For example:
         document
           .getElementById('custom-model-provider')
           .addEventListener('change', () => (pendingChanges.customModel = true));
+        document
+          .getElementById('openai-reasoning-effort')
+          .addEventListener('change', () => (pendingChanges.reasoningEffort = true));
+        document
+          .getElementById('openai-fast-mode')
+          .addEventListener('change', () => (pendingChanges.fastMode = true));
         document
           .getElementById('custom-languages-input')
           .addEventListener('input', () => (pendingChanges.customLanguages = true));
@@ -596,6 +645,55 @@ For example:
           showStatus('Custom model saved successfully!', false);
         } else {
           showStatus('Failed to save custom model. Please try again.', true);
+        }
+      });
+
+      // OpenAI reasoning effort functionality
+      ipcRenderer.on('openai-reasoning-effort-loaded', (event, settings) => {
+        const select = document.getElementById('openai-reasoning-effort');
+        const modelName = document.getElementById('selected-model-name');
+        const help = document.getElementById('openai-reasoning-effort-help');
+        const fastMode = document.getElementById('openai-fast-mode');
+        const fastHelp = document.getElementById('openai-fast-mode-help');
+        modelName.textContent = `Selected model: ${settings.modelName}`;
+        select.disabled = !settings.supported;
+        select.value = settings.effort || '';
+        fastMode.disabled = !settings.fastSupported;
+        fastMode.checked = Boolean(settings.fastMode);
+        if (!settings.supported) {
+          help.textContent =
+            'Select an OpenAI GPT-5 or o-series model to configure reasoning effort.';
+        }
+        if (!settings.fastSupported) {
+          fastHelp.textContent = 'Fast mode is available for OpenAI GPT-5.6 models only.';
+        }
+      });
+
+      function saveOpenAIReasoningEffort() {
+        const effort = document.getElementById('openai-reasoning-effort').value || null;
+        ipcRenderer.send('save-openai-reasoning-effort', effort);
+      }
+
+      function saveOpenAIFastMode() {
+        const enabled = document.getElementById('openai-fast-mode').checked;
+        ipcRenderer.send('save-openai-fast-mode', enabled);
+      }
+
+      ipcRenderer.on('openai-reasoning-effort-saved', (event, success) => {
+        if (success) {
+          pendingChanges.reasoningEffort = false;
+          showStatus('Reasoning effort saved successfully!', false);
+        } else {
+          showStatus('Failed to save reasoning effort. Please try again.', true);
+        }
+      });
+
+      ipcRenderer.on('openai-fast-mode-saved', (event, success) => {
+        if (success) {
+          pendingChanges.fastMode = false;
+          showStatus('Fast mode setting saved successfully!', false);
+        } else {
+          showStatus('Failed to save Fast mode setting. Please try again.', true);
         }
       });
 
@@ -713,6 +811,12 @@ For example:
         if (pendingChanges.customModel) {
           saveCustomModel();
         }
+        if (pendingChanges.reasoningEffort) {
+          saveOpenAIReasoningEffort();
+        }
+        if (pendingChanges.fastMode) {
+          saveOpenAIFastMode();
+        }
         if (pendingChanges.customLanguages) {
           saveCustomLanguages();
         }
@@ -724,6 +828,8 @@ For example:
           !pendingChanges.apiKeys &&
           !pendingChanges.customPrompt &&
           !pendingChanges.customModel &&
+          !pendingChanges.reasoningEffort &&
+          !pendingChanges.fastMode &&
           !pendingChanges.customLanguages &&
           !pendingChanges.display
         ) {

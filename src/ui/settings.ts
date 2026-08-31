@@ -11,12 +11,20 @@ import {
   type ApiKeys,
   type Config,
   type CustomModel,
+  type OpenAIReasoningEffort,
 } from '../config/index.ts';
 import { resetPopupSize } from './popup.ts';
 import { getAIProvider } from '../translation/providers.ts';
 import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
 import { isValidMaxInputCharacters } from '../input-character-limit.ts';
+import {
+  getOpenAIProviderOptions,
+  getSelectedModelInfo,
+  supportsOpenAIFastMode,
+  supportsOpenAIReasoningEffort,
+} from '../reasoning-effort.ts';
+import { OPENAI_REASONING_EFFORTS } from '../config/types.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -141,6 +149,68 @@ export function setupSettingsIPC(): void {
     event.reply('custom-model-saved', true);
   });
 
+  ipcMain.on('load-openai-reasoning-effort', event => {
+    if (!isSettingsEvent(event)) return;
+    const config = getConfig();
+    const modelInfo = getSelectedModelInfo(config);
+    const supported = supportsOpenAIReasoningEffort(modelInfo);
+    event.reply('openai-reasoning-effort-loaded', {
+      modelName: modelInfo?.name ?? 'Unknown model',
+      supported,
+      effort: supported && modelInfo ? config.openaiReasoningEfforts?.[modelInfo.model] : undefined,
+      fastSupported: supportsOpenAIFastMode(modelInfo),
+      fastMode: modelInfo ? config.openaiFastModels?.includes(modelInfo.model) : false,
+    });
+  });
+
+  ipcMain.on('save-openai-fast-mode', (event, enabled: boolean) => {
+    if (!isSettingsEvent(event)) return;
+    if (typeof enabled !== 'boolean') {
+      event.reply('openai-fast-mode-saved', false);
+      return;
+    }
+
+    const config = getConfig();
+    const modelInfo = getSelectedModelInfo(config);
+    if (!modelInfo || !supportsOpenAIFastMode(modelInfo)) {
+      event.reply('openai-fast-mode-saved', false);
+      return;
+    }
+
+    const fastModels = new Set(config.openaiFastModels);
+    if (enabled) {
+      fastModels.add(modelInfo.model);
+    } else {
+      fastModels.delete(modelInfo.model);
+    }
+    updateConfig({ openaiFastModels: [...fastModels] });
+    event.reply('openai-fast-mode-saved', true);
+  });
+
+  ipcMain.on('save-openai-reasoning-effort', (event, effort: OpenAIReasoningEffort | null) => {
+    if (!isSettingsEvent(event)) return;
+    if (effort !== null && !OPENAI_REASONING_EFFORTS.includes(effort)) {
+      event.reply('openai-reasoning-effort-saved', false);
+      return;
+    }
+
+    const config = getConfig();
+    const modelInfo = getSelectedModelInfo(config);
+    if (!modelInfo || !supportsOpenAIReasoningEffort(modelInfo)) {
+      event.reply('openai-reasoning-effort-saved', false);
+      return;
+    }
+
+    const efforts = { ...config.openaiReasoningEfforts };
+    if (effort === null) {
+      delete efforts[modelInfo.model];
+    } else {
+      efforts[modelInfo.model] = effort;
+    }
+    updateConfig({ openaiReasoningEfforts: efforts });
+    event.reply('openai-reasoning-effort-saved', true);
+  });
+
   ipcMain.on('load-custom-languages', event => {
     if (!isSettingsEvent(event)) return;
     const config = getConfig();
@@ -254,6 +324,7 @@ export function setupSettingsIPC(): void {
           }
 
           const model = getAIProvider(config.aiModel, apiKeys, config.customModel);
+          const providerOptions = getOpenAIProviderOptions(config);
 
           const systemPrompt = `You are an expert at writing translation instruction prompts.
 Your task is to generate or modify a custom prompt that will be used to guide AI translations.
@@ -274,6 +345,7 @@ Rules:
             model,
             system: systemPrompt,
             prompt: userPrompt,
+            ...(providerOptions ? { providerOptions } : {}),
           });
 
           event.reply('custom-prompt-generated', {

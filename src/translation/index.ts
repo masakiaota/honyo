@@ -7,6 +7,7 @@ import { languages } from '../language/constants.ts';
 import { getAIProvider } from './providers.ts';
 import { getConfig, getApiKeys } from '../config/index.ts';
 import type { Config, ApiKeys } from '../config/types.ts';
+import { getOpenAIProviderOptions } from '../reasoning-effort.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
 
 export type TranslationResult = ParsedTranslation;
@@ -135,6 +136,7 @@ export async function translateTextDetailed(
 
   // Get the model
   const model = getModel(config, apiKeys);
+  const providerOptions = getOpenAIProviderOptions(config);
 
   console.log(`Translating text:`, text.slice(0, 50) + '...');
 
@@ -152,12 +154,14 @@ export async function translateTextDetailed(
           model,
           system: systemPrompt,
           prompt: text,
+          ...(providerOptions ? { providerOptions } : {}),
           abortSignal: signal,
         }
       : {
           model,
           system: systemPrompt,
           prompt: text,
+          ...(providerOptions ? { providerOptions } : {}),
         },
   );
 
@@ -229,6 +233,7 @@ export async function translateTextStreaming(
 
     // Get the model
     const model = getModel(config, apiKeys);
+    const providerOptions = getOpenAIProviderOptions(config);
 
     console.log(`Translating text (streaming):`, text.slice(0, 50) + '...');
 
@@ -246,12 +251,14 @@ export async function translateTextStreaming(
             model,
             system: systemPrompt,
             prompt: text,
+            ...(providerOptions ? { providerOptions } : {}),
             abortSignal: signal,
           }
         : {
             model,
             system: systemPrompt,
             prompt: text,
+            ...(providerOptions ? { providerOptions } : {}),
           },
     );
 
