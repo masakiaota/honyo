@@ -16,6 +16,7 @@ import { resetPopupSize } from './popup.ts';
 import { getAIProvider } from '../translation/providers.ts';
 import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
+import { isValidMaxInputCharacters } from '../input-character-limit.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -158,6 +159,7 @@ export function setupSettingsIPC(): void {
     event.reply('auto-close-on-blur-loaded', config.autoCloseOnBlur ?? true);
     event.reply('enable-streaming-loaded', config.enableStreaming ?? true);
     event.reply('popup-font-size-loaded', config.popupFontSize ?? 14);
+    event.reply('max-input-characters-loaded', config.maxInputCharacters);
   });
 
   ipcMain.on('save-auto-close-on-blur', (event, autoCloseOnBlur: boolean) => {
@@ -170,12 +172,22 @@ export function setupSettingsIPC(): void {
     'save-display-settings',
     (
       event,
-      settings: { autoCloseOnBlur: boolean; enableStreaming: boolean; popupFontSize?: number },
+      settings: {
+        autoCloseOnBlur: boolean;
+        enableStreaming: boolean;
+        popupFontSize?: number;
+        maxInputCharacters: number;
+      },
     ) => {
       if (!isSettingsEvent(event)) return;
+      if (!isValidMaxInputCharacters(settings.maxInputCharacters)) {
+        event.reply('display-settings-saved', false);
+        return;
+      }
       const updates: Partial<Config> = {
         autoCloseOnBlur: settings.autoCloseOnBlur,
         enableStreaming: settings.enableStreaming,
+        maxInputCharacters: settings.maxInputCharacters,
       };
       if (typeof settings.popupFontSize === 'number' && !Number.isNaN(settings.popupFontSize)) {
         updates.popupFontSize = Math.min(24, Math.max(10, Math.round(settings.popupFontSize)));

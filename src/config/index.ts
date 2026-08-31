@@ -5,6 +5,10 @@ import { getModelInfo } from '../models-remote.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
 import {
+  DEFAULT_MAX_INPUT_CHARACTERS,
+  isValidMaxInputCharacters,
+} from '../input-character-limit.ts';
+import {
   loadConfigFromFile,
   saveConfigToFile,
   loadApiKeysFromFile,
@@ -46,6 +50,7 @@ function getDefaultConfig(): Config {
     autoCloseOnBlur: true,
     enableStreaming: true,
     customPrompt: '',
+    maxInputCharacters: DEFAULT_MAX_INPUT_CHARACTERS,
     displayMode: 'notification',
     popupFontSize: 14,
   };
@@ -71,6 +76,10 @@ export function initializeConfig(): void {
   // Initialize custom prompt if not present
   if (config.customPrompt === undefined) {
     config.customPrompt = '';
+  }
+
+  if (!isValidMaxInputCharacters(config.maxInputCharacters)) {
+    config.maxInputCharacters = DEFAULT_MAX_INPUT_CHARACTERS;
   }
 
   // Initialize display mode if not present

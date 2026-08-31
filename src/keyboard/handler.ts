@@ -2,6 +2,10 @@ import { clipboard, Notification } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { translateTextSafe, translateTextStreaming } from '../translation/index.ts';
 import { getConfig, getPausedState } from '../config/index.ts';
+import {
+  exceedsInputCharacterLimit,
+  getInputCharacterLimitMessage,
+} from '../input-character-limit.ts';
 import { setTrayIcon } from '../ui/tray.ts';
 import {
   showTranslationPopup,
@@ -57,11 +61,18 @@ export function setupKeyboardHandler(): void {
               return; // Do nothing
             }
 
+            const config = getConfig();
+            if (exceedsInputCharacterLimit(text, config.maxInputCharacters)) {
+              new Notification({
+                title: 'Input Character Limit Exceeded',
+                body: getInputCharacterLimitMessage(config.maxInputCharacters),
+              }).show();
+              return;
+            }
+
             // Start translation
             isTranslating = true;
             setTrayIcon(true);
-
-            const config = getConfig();
 
             // Set current abort controller
             currentAbortController = abortController;

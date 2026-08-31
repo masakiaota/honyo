@@ -18,6 +18,7 @@ export interface Config {
   aiModel: string;
   autoCloseOnBlur?: boolean;
   customPrompt: string;
+  maxInputCharacters: number;
   displayMode: DisplayMode;
   customModel?: CustomModel;
   customLanguages?: string[];

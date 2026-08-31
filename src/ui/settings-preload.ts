@@ -30,6 +30,7 @@ const receiveChannels = new Set([
   'auto-close-on-blur-loaded',
   'enable-streaming-loaded',
   'popup-font-size-loaded',
+  'max-input-characters-loaded',
   'auto-close-on-blur-saved',
   'display-settings-saved',
   'popup-size-reset',
