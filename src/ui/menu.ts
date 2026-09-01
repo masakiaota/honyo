@@ -142,10 +142,12 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
           anthropic: Array<[string, AIModelInfo]>;
           openai: Array<[string, AIModelInfo]>;
           google: Array<[string, AIModelInfo]>;
+          codex: Array<[string, AIModelInfo]>;
         } = {
           anthropic: [],
           openai: [],
           google: [],
+          codex: [],
         };
 
         for (const [modelId, modelInfo] of Object.entries(getAvailableModels())) {
@@ -185,6 +187,21 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
         if (modelsByProvider.google.length > 0) {
           menuItems.push({ type: 'separator' as const });
           for (const [modelId, modelInfo] of modelsByProvider.google) {
+            menuItems.push({
+              label: modelInfo.name,
+              type: 'radio' as const,
+              checked: config.aiModel === modelId,
+              click: (): void => {
+                updateConfig({ aiModel: modelId });
+                tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
+              },
+            });
+          }
+        }
+
+        if (modelsByProvider.codex.length > 0) {
+          menuItems.push({ type: 'separator' as const });
+          for (const [modelId, modelInfo] of modelsByProvider.codex) {
             menuItems.push({
               label: modelInfo.name,
               type: 'radio' as const,

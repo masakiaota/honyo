@@ -25,6 +25,14 @@ import {
   supportsOpenAIReasoningEffort,
 } from '../reasoning-effort.ts';
 import { OPENAI_REASONING_EFFORTS } from '../config/types.ts';
+import {
+  getCodexConnectionState,
+  logoutCodex,
+  runCodexText,
+  startCodexLogin,
+  subscribeCodexConnection,
+} from '../codex/index.ts';
+import { getCodexModelId } from '../codex/models.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -46,6 +54,7 @@ const allowedExternalHosts = new Set([
 ]);
 
 let settingsWindow: BrowserWindow | null = null;
+let codexSubscriptionInstalled = false;
 
 function getPreloadPath(): string {
   return app.isPackaged
@@ -114,6 +123,49 @@ export function openSettingsWindow(): void {
 }
 
 export function setupSettingsIPC(): void {
+  if (!codexSubscriptionInstalled) {
+    subscribeCodexConnection(state => {
+      if (
+        !settingsWindow ||
+        settingsWindow.isDestroyed() ||
+        settingsWindow.webContents.isDestroyed()
+      ) {
+        return;
+      }
+      settingsWindow.webContents.send('codex-account-changed', state);
+    });
+    codexSubscriptionInstalled = true;
+  }
+
+  ipcMain.on('load-codex-account', event => {
+    if (!isSettingsEvent(event)) return;
+    event.reply('codex-account-loaded', getCodexConnectionState());
+  });
+
+  ipcMain.on('start-codex-login', event => {
+    if (!isSettingsEvent(event)) return;
+    void startCodexLogin()
+      .then(() => event.reply('codex-login-started', { success: true }))
+      .catch(error =>
+        event.reply('codex-login-started', {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to start ChatGPT login',
+        }),
+      );
+  });
+
+  ipcMain.on('logout-codex', event => {
+    if (!isSettingsEvent(event)) return;
+    void logoutCodex()
+      .then(() => event.reply('codex-logout-completed', { success: true }))
+      .catch(error =>
+        event.reply('codex-logout-completed', {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to log out',
+        }),
+      );
+  });
+
   ipcMain.on('load-api-keys', event => {
     if (!isSettingsEvent(event)) return;
     event.reply('api-keys-loaded', getApiKeys());
@@ -296,35 +348,9 @@ export function setupSettingsIPC(): void {
         try {
           const config = getConfig();
           const apiKeys = getApiKeys();
-
-          // Validate API key
-          let apiKey: string | undefined;
-          if (config.aiModel === CUSTOM_MODEL_ID) {
-            if (!config.customModel?.provider) {
-              event.reply('custom-prompt-generated', {
-                success: false,
-                error: 'Custom model not configured',
-              });
-              return;
-            }
-            apiKey = apiKeys[config.customModel.provider];
-          } else {
-            const modelInfo = getModelInfo(config.aiModel);
-            if (modelInfo) {
-              apiKey = apiKeys[modelInfo.provider];
-            }
-          }
-
-          if (!apiKey) {
-            event.reply('custom-prompt-generated', {
-              success: false,
-              error: 'API key not configured',
-            });
-            return;
-          }
-
-          const model = getAIProvider(config.aiModel, apiKeys, config.customModel);
-          const providerOptions = getOpenAIProviderOptions(config);
+          const modelInfo =
+            config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
+          const codexModel = getCodexModelId(config.aiModel);
 
           const systemPrompt = `You are an expert at writing translation instruction prompts.
 Your task is to generate or modify a custom prompt that will be used to guide AI translations.
@@ -340,6 +366,43 @@ Rules:
           const userPrompt = data.currentPrompt
             ? `Current custom prompt:\n${data.currentPrompt}\n\nUser's request: ${data.instruction}`
             : `User's request: ${data.instruction}`;
+
+          if (codexModel) {
+            const text = await runCodexText(
+              codexModel,
+              `${systemPrompt}\n\nDo not use tools.\n\n${userPrompt}`,
+            );
+            event.reply('custom-prompt-generated', { success: true, prompt: text.trim() });
+            return;
+          }
+
+          // Validate API key
+          let apiKey: string | undefined;
+          if (config.aiModel === CUSTOM_MODEL_ID) {
+            if (!config.customModel?.provider) {
+              event.reply('custom-prompt-generated', {
+                success: false,
+                error: 'Custom model not configured',
+              });
+              return;
+            }
+            apiKey = apiKeys[config.customModel.provider];
+          } else {
+            if (modelInfo && modelInfo.provider !== 'codex') {
+              apiKey = apiKeys[modelInfo.provider];
+            }
+          }
+
+          if (!apiKey) {
+            event.reply('custom-prompt-generated', {
+              success: false,
+              error: 'API key not configured',
+            });
+            return;
+          }
+
+          const model = getAIProvider(config.aiModel, apiKeys, config.customModel);
+          const providerOptions = getOpenAIProviderOptions(config);
 
           const { text } = await generateText({
             model,

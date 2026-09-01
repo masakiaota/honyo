@@ -22,6 +22,8 @@ extraMetadata:
 asar: true
 asarUnpack:
   - node_modules/uiohook-napi/**/*
+  - node_modules/@openai/codex/**/*
+  - node_modules/@openai/codex-*/**/*
 extraResources:
   - from: src/ui/icon-normal.png
     to: icons/icon-normal.png
@@ -50,4 +52,3 @@ linux:
 npmRebuild: true
 buildDependenciesFromSource: true
 nodeGypRebuild: false
-
