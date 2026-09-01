@@ -53,9 +53,6 @@ ${customPromptSection}`.trim();
 function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; error?: string } {
   const selectedModel =
     config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
-  if (selectedModel?.provider === 'codex') {
-    return { valid: true };
-  }
 
   if (config.aiModel === CUSTOM_MODEL_ID) {
     if (!config.customModel || !config.customModel.model || !config.customModel.provider) {

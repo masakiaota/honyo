@@ -125,7 +125,14 @@ export function openSettingsWindow(): void {
 export function setupSettingsIPC(): void {
   if (!codexSubscriptionInstalled) {
     subscribeCodexConnection(state => {
-      settingsWindow?.webContents.send('codex-account-changed', state);
+      if (
+        !settingsWindow ||
+        settingsWindow.isDestroyed() ||
+        settingsWindow.webContents.isDestroyed()
+      ) {
+        return;
+      }
+      settingsWindow.webContents.send('codex-account-changed', state);
     });
     codexSubscriptionInstalled = true;
   }

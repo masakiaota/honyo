@@ -108,8 +108,18 @@ export class CodexAppServer {
     const authUrl = stringValue(result?.authUrl);
     if (!authUrl) throw new Error('ChatGPT login URL was not returned');
 
+    let loginUrl: URL;
+    try {
+      loginUrl = new URL(authUrl);
+    } catch {
+      throw new Error('ChatGPT login URL is invalid');
+    }
+    if (loginUrl.protocol !== 'https:') {
+      throw new Error('ChatGPT login URL must use HTTPS');
+    }
+
     const { shell } = await import('electron');
-    await shell.openExternal(authUrl);
+    await shell.openExternal(loginUrl.toString());
   }
 
   async logout(): Promise<void> {
