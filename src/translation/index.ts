@@ -9,6 +9,8 @@ import { getConfig, getApiKeys } from '../config/index.ts';
 import type { Config, ApiKeys } from '../config/types.ts';
 import { getOpenAIProviderOptions } from '../reasoning-effort.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
+import { runCodexText } from '../codex/index.ts';
+import { getCodexModelId, isCodexModelKey } from '../codex/models.ts';
 
 export type TranslationResult = ParsedTranslation;
 
@@ -49,6 +51,12 @@ ${customPromptSection}`.trim();
 }
 
 function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; error?: string } {
+  const selectedModel =
+    config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
+  if (selectedModel?.provider === 'codex') {
+    return { valid: true };
+  }
+
   if (config.aiModel === CUSTOM_MODEL_ID) {
     if (!config.customModel || !config.customModel.model || !config.customModel.provider) {
       new Notification({
@@ -67,9 +75,13 @@ function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; err
       return { valid: false, error: `API key not configured for ${config.customModel.provider}` };
     }
   } else {
-    const modelInfo = getModelInfo(config.aiModel);
+    const modelInfo = selectedModel;
     if (!modelInfo) {
       return { valid: false, error: `Unknown model: ${config.aiModel}` };
+    }
+
+    if (modelInfo.provider === 'codex') {
+      return { valid: false, error: 'ChatGPT/Codex account is not connected' };
     }
 
     const apiKey = apiKeys[modelInfo.provider];
@@ -83,6 +95,43 @@ function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; err
   }
 
   return { valid: true };
+}
+
+function isCodexModel(config: Config): boolean {
+  return isCodexModelKey(config.aiModel);
+}
+
+function buildCodexPrompt(systemPrompt: string, text: string): string {
+  return `${systemPrompt}
+
+Do not use tools, inspect files, or run commands. Return the requested translation directly.
+
+<source_text>
+${text}
+</source_text>`;
+}
+
+async function translateWithCodex(
+  text: string,
+  primaryLanguage: string,
+  secondaryLanguage: string,
+  config: Config,
+  signal?: AbortSignal,
+): Promise<TranslationResult> {
+  const model = getCodexModelId(config.aiModel);
+  if (!model) {
+    throw new Error('Selected ChatGPT/Codex model is unavailable');
+  }
+
+  const systemPrompt = buildSystemPrompt(
+    primaryLanguage,
+    secondaryLanguage,
+    config.customPrompt,
+    config.customLanguages,
+  );
+  const raw = await runCodexText(model, buildCodexPrompt(systemPrompt, text), undefined, signal);
+  const parsed = parseTranslationOutput(raw.trim());
+  return { ...parsed, translation: parsed.translation.trim() };
 }
 
 function getModel(config: Config, apiKeys: ApiKeys): LanguageModel {
@@ -127,6 +176,10 @@ export async function translateTextDetailed(
 ): Promise<TranslationResult> {
   const config = getConfig();
   const apiKeys = getApiKeys();
+
+  if (isCodexModel(config)) {
+    return translateWithCodex(text, primaryLanguage, secondaryLanguage, config, signal);
+  }
 
   // Validate API key (shows a Notification on failure) and throw on invalid.
   const validation = validateApiKey(config, apiKeys);
@@ -225,6 +278,49 @@ export async function translateTextStreaming(
   const apiKeys = getApiKeys();
 
   try {
+    if (isCodexModel(config)) {
+      const model = getCodexModelId(config.aiModel);
+      if (!model) {
+        throw new Error('Selected ChatGPT/Codex model is unavailable');
+      }
+      const systemPrompt = buildSystemPrompt(
+        primaryLanguage,
+        secondaryLanguage,
+        config.customPrompt,
+        config.customLanguages,
+      );
+      let fullRaw = '';
+      let headerResolved = false;
+      let languagesEmitted = false;
+      const emitLanguages = (parsed: ParsedTranslation): void => {
+        if (!languagesEmitted && parsed.sourceLanguage && parsed.targetLanguage) {
+          languagesEmitted = true;
+          onLanguages?.(parsed.sourceLanguage, parsed.targetLanguage);
+        }
+      };
+
+      const raw = await runCodexText(
+        model,
+        buildCodexPrompt(systemPrompt, text),
+        delta => {
+          fullRaw += delta;
+          if (!headerResolved) {
+            if (!isHeaderResolvable(fullRaw)) return;
+            headerResolved = true;
+          }
+          const parsed = parseTranslationOutput(fullRaw);
+          emitLanguages(parsed);
+          onChunk(parsed.translation);
+        },
+        signal,
+      );
+      if (!fullRaw) fullRaw = raw;
+      const parsed = parseTranslationOutput(fullRaw);
+      emitLanguages(parsed);
+      onChunk(parsed.translation);
+      return parsed.translation.trim();
+    }
+
     // Validate API key
     const validation = validateApiKey(config, apiKeys);
     if (!validation.valid) {

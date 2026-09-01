@@ -15,8 +15,6 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            arch: x64
-          - os: macos-latest
             arch: arm64
           # Pinned to windows-2022: the windows-latest image ships Visual
           # Studio 18, which node-gyp cannot use to rebuild uiohook-napi
@@ -111,17 +109,11 @@ jobs:
     - name: Remove duplicate and unwanted files
       run: |
         find . -name "builder-debug.yml" -type f -delete
-        # Remove duplicate latest-*.yml files (keep only one of each)
-        # Keep the first occurrence and remove duplicates from other arch builds
-        if [ -f "macos-latest-x64-build/latest-mac.yml" ] && [ -f "macos-latest-arm64-build/latest-mac.yml" ]; then
-          rm "macos-latest-arm64-build/latest-mac.yml"
-        fi
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          macos-latest-x64-build/*
           macos-latest-arm64-build/*
           windows-2022-x64-build/*
           ubuntu-latest-x64-build/*
@@ -147,12 +139,6 @@ jobs:
         owner: eukarya-inc
         repositories: homebrew-tap
 
-    - name: Download macOS x64 artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: macos-latest-x64-build
-        path: artifacts/x64
-
     - name: Download macOS arm64 artifact
       uses: actions/download-artifact@v4
       with:
@@ -164,17 +150,12 @@ jobs:
         TAG=${GITHUB_REF#refs/tags/}
         VERSION=${TAG#v}
 
-        SHA_X64=$(sha256sum "artifacts/x64/Honyo-${VERSION}.dmg" | awk '{print $1}')
         SHA_ARM=$(sha256sum "artifacts/arm64/Honyo-${VERSION}-arm64.dmg" | awk '{print $1}')
 
         cat > honyo.rb <<CASK
         cask "honyo" do
           version "${VERSION}"
 
-          on_intel do
-            url "https://github.com/eukarya-inc/honyo/releases/download/v#{version}/Honyo-#{version}.dmg"
-            sha256 "${SHA_X64}"
-          end
           on_arm do
             url "https://github.com/eukarya-inc/honyo/releases/download/v#{version}/Honyo-#{version}-arm64.dmg"
             sha256 "${SHA_ARM}"

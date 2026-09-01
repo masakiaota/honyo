@@ -1,6 +1,8 @@
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'codex';
+
 export interface AIModelInfo {
   name: string;
-  provider: 'anthropic' | 'openai' | 'google';
+  provider: AIProvider;
   model: string;
 }
 

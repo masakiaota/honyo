@@ -1,6 +1,7 @@
 import { app, Notification } from 'electron';
 import { stopKeyboardListener } from '../keyboard/index.ts';
 import { destroyTray, getTray } from '../ui/tray.ts';
+import { shutdownCodex } from '../codex/index.ts';
 
 // Prevent multiple instances
 export function setupSingleInstance(): boolean {
@@ -36,6 +37,7 @@ export function setupPlatformSpecific(): void {
 // Cleanup function
 export function cleanupAndExit(): void {
   stopKeyboardListener();
+  shutdownCodex();
   destroyTray();
 
   // Wait a bit then force exit
@@ -56,6 +58,7 @@ export function setupShutdownHandlers(): void {
   app.on('before-quit', () => {
     console.log('App is about to quit, cleaning up...');
     stopKeyboardListener();
+    shutdownCodex();
   });
 
   // Process termination handling

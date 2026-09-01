@@ -70,6 +70,7 @@
     "@ai-sdk/anthropic": "^2.0.23",
     "@ai-sdk/google": "^2.0.17",
     "@ai-sdk/openai": "^2.0.42",
+    "@openai/codex": "^0.152.0",
     "ai": "^5.0.60",
     "dotenv": "^17.2.3",
     "electron-updater": "^6.6.2",
@@ -99,7 +100,9 @@
     },
     "asar": true,
     "asarUnpack": [
-      "node_modules/uiohook-napi/**/*"
+      "node_modules/uiohook-napi/**/*",
+      "node_modules/@openai/codex/**/*",
+      "node_modules/@openai/codex-*/**/*"
     ],
     "extraResources": [
       {

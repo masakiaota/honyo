@@ -261,6 +261,21 @@
         <div class="container">
           <h2>API Key Settings</h2>
 
+          <h3 style="margin-bottom: 10px; color: #444; font-size: 16px">ChatGPT/Codex</h3>
+          <div class="help-text" id="codex-account-status">
+            Sign in with ChatGPT to use your Codex subscription.
+          </div>
+          <div style="display: flex; gap: 10px; margin: 10px 0 24px">
+            <button class="save-btn" id="codex-login-btn" onclick="startCodexLogin()">
+              Sign in with ChatGPT
+            </button>
+            <button class="reset-btn" id="codex-logout-btn" onclick="logoutCodex()" disabled>
+              Log out
+            </button>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #eee; margin: 0 0 25px" />
+
           <div class="form-group">
             <label for="anthropic-key">Claude API Key</label>
             <input type="password" id="anthropic-key" placeholder="sk-ant-api03-..." />
@@ -525,6 +540,7 @@ For example:
 
       // Load data on startup
       window.addEventListener('DOMContentLoaded', () => {
+        ipcRenderer.send('load-codex-account');
         ipcRenderer.send('load-api-keys');
         ipcRenderer.send('load-custom-prompt');
         ipcRenderer.send('load-custom-model');
@@ -579,6 +595,54 @@ For example:
       });
 
       // API Keys functionality
+      function updateCodexAccount(state) {
+        const status = document.getElementById('codex-account-status');
+        const login = document.getElementById('codex-login-btn');
+        const logout = document.getElementById('codex-logout-btn');
+        const account = state.account;
+
+        if (state.status === 'connected' && account) {
+          const identity = account.email || 'ChatGPT account';
+          const plan = account.planType ? ` (${account.planType})` : '';
+          status.textContent = `Connected as ${identity}${plan}. Models are available in the tray menu.`;
+          login.disabled = false;
+          login.textContent = 'Reconnect ChatGPT';
+          logout.disabled = false;
+          return;
+        }
+
+        if (state.status === 'connecting') {
+          status.textContent =
+            'Complete sign-in in your browser. This window updates automatically.';
+          login.disabled = true;
+          login.textContent = 'Opening browser...';
+          logout.disabled = true;
+          return;
+        }
+
+        status.textContent = state.error || 'Sign in with ChatGPT to use your Codex subscription.';
+        login.disabled = false;
+        login.textContent = 'Sign in with ChatGPT';
+        logout.disabled = true;
+      }
+
+      function startCodexLogin() {
+        ipcRenderer.send('start-codex-login');
+      }
+
+      function logoutCodex() {
+        ipcRenderer.send('logout-codex');
+      }
+
+      ipcRenderer.on('codex-account-loaded', (event, state) => updateCodexAccount(state));
+      ipcRenderer.on('codex-account-changed', (event, state) => updateCodexAccount(state));
+      ipcRenderer.on('codex-login-started', (event, result) => {
+        if (!result.success) updateCodexAccount({ status: 'disconnected', error: result.error });
+      });
+      ipcRenderer.on('codex-logout-completed', (event, result) => {
+        if (!result.success) updateCodexAccount({ status: 'disconnected', error: result.error });
+      });
+
       ipcRenderer.on('api-keys-loaded', (event, keys) => {
         if (keys.anthropic) document.getElementById('anthropic-key').value = keys.anthropic;
         if (keys.openai) document.getElementById('openai-key').value = keys.openai;

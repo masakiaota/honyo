@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { config as loadEnv } from 'dotenv';
 import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
+import { isCodexModelKey } from '../codex/models.ts';
 import { getModelInfo } from '../models-remote.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
@@ -68,7 +69,11 @@ export function initializeConfig(): void {
   }
 
   // Validate AI model exists (custom model is always allowed)
-  if (config.aiModel !== CUSTOM_MODEL_ID && !getModelInfo(config.aiModel)) {
+  if (
+    config.aiModel !== CUSTOM_MODEL_ID &&
+    !isCodexModelKey(config.aiModel) &&
+    !getModelInfo(config.aiModel)
+  ) {
     console.log(`Invalid AI model: ${config.aiModel}, resetting to default`);
     config.aiModel = DEFAULT_AI_MODEL;
   }

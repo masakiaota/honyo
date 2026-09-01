@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const sendChannels = new Set([
+  'load-codex-account',
+  'start-codex-login',
+  'logout-codex',
   'load-api-keys',
   'save-api-keys',
   'load-custom-prompt',
@@ -22,6 +25,10 @@ const sendChannels = new Set([
 ]);
 
 const receiveChannels = new Set([
+  'codex-account-loaded',
+  'codex-account-changed',
+  'codex-login-started',
+  'codex-logout-completed',
   'api-keys-loaded',
   'api-keys-saved',
   'custom-prompt-loaded',

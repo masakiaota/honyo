@@ -21,6 +21,7 @@ let cacheLoaded = false;
 let refreshInFlight = false;
 let onModelsChanged: (() => void) | null = null;
 let getSelectedModelKey: (() => string | undefined) | null = null;
+let codexModels: Record<string, AIModelInfo> = {};
 
 function cachePath(): string {
   return join(app.getPath('userData'), 'models-cache.json');
@@ -37,6 +38,18 @@ export function setModelsChangedCallback(callback: () => void): void {
  */
 export function setSelectedModelProvider(fn: () => string | undefined): void {
   getSelectedModelKey = fn;
+}
+
+/**
+ * Replace the account-specific Codex catalog. These models come from the
+ * signed-in App Server and are intentionally kept out of the public-model
+ * cache.
+ */
+export function setCodexModels(models: Record<string, AIModelInfo>): void {
+  const previous = JSON.stringify(codexModels);
+  const next = JSON.stringify(models);
+  codexModels = models;
+  if (previous !== next) onModelsChanged?.();
 }
 
 export function loadModelsCache(): void {
@@ -251,13 +264,13 @@ function buildAvailableModels(fromCache: ModelsCache | null): Record<string, AIM
 export function getAvailableModels(): Record<string, AIModelInfo> {
   if (!cacheLoaded) loadModelsCache();
 
-  const result = buildAvailableModels(cache);
+  const result = { ...buildAvailableModels(cache), ...codexModels };
 
   // Safety net: keep the selected model resolvable even if it dropped out of the
   // fetched/capped list (refreshModels also pins it into the cache itself).
   const key = getSelectedModelKey?.();
   if (key && key !== CUSTOM_MODEL_ID && !result[key]) {
-    const info = AI_MODELS[key];
+    const info = AI_MODELS[key] ?? codexModels[key];
     if (info) result[key] = info;
   }
 
@@ -270,7 +283,7 @@ export function getAvailableModels(): Record<string, AIModelInfo> {
  * keeps working even when a fetched list is present).
  */
 export function getModelInfo(modelId: string): AIModelInfo | undefined {
-  return getAvailableModels()[modelId] ?? AI_MODELS[modelId];
+  return getAvailableModels()[modelId] ?? AI_MODELS[modelId] ?? codexModels[modelId];
 }
 
 function serializeModels(models: Partial<Record<Provider, AIModelInfo[]>>): string {
@@ -288,7 +301,7 @@ function pinSelectedModel(models: Partial<Record<Provider, AIModelInfo[]>>): voi
   if (!key || key === CUSTOM_MODEL_ID) return;
 
   const info = buildAvailableModels(cache)[key] ?? AI_MODELS[key];
-  if (!info) return;
+  if (!info || info.provider === 'codex') return;
 
   const list = models[info.provider];
   if (!list) {
