@@ -13,6 +13,15 @@ let isDownloading = false;
 let isManualCheck = false;
 let downloadProgress = 0;
 
+function checkForUpdatesSafely(): void {
+  void autoUpdater.checkForUpdates().catch(error => {
+    console.error('Failed to check for updates:', error);
+    isCheckingForUpdate = false;
+    isManualCheck = false;
+    menuUpdateCallback?.();
+  });
+}
+
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
   if (typeof import.meta.url !== 'undefined') {
@@ -103,15 +112,6 @@ export function setupAutoUpdater(): void {
   );
   console.log('- Platform:', process.platform);
   console.log('- Allow downgrade:', autoUpdater.allowDowngrade);
-
-  // Check for updates on startup and every hour
-  void autoUpdater.checkForUpdates();
-  setInterval(
-    () => {
-      void autoUpdater.checkForUpdates();
-    },
-    60 * 60 * 1000,
-  ); // 1 hour
 
   // Event handlers
   autoUpdater.on('checking-for-update', () => {
@@ -351,10 +351,15 @@ export function setupAutoUpdater(): void {
         }
       });
   });
+
+  // Register error listeners before checking: unpacked development builds do
+  // not contain app-update.yml, so their update check rejects immediately.
+  checkForUpdatesSafely();
+  setInterval(checkForUpdatesSafely, 60 * 60 * 1000);
 }
 
 // Manual check for updates (can be called from menu)
 export function checkForUpdates(): void {
   isManualCheck = true;
-  void autoUpdater.checkForUpdates();
+  checkForUpdatesSafely();
 }

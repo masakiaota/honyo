@@ -500,6 +500,8 @@
       ipcRenderer.on('translation-complete', (event, text) => {
         isStreaming = false;
         currentTranslation = text;
+        document.getElementById('spinner-container').classList.remove('active');
+        document.getElementById('translation-text').style.display = 'block';
         if (view === 'translation') {
           document.getElementById('translation-text').textContent = text;
         }

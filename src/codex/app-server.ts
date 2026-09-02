@@ -170,7 +170,7 @@ export class CodexAppServer {
         model,
         cwd: app.getPath('temp'),
         approvalPolicy: 'never',
-        sandbox: 'readOnly',
+        permissions: ':read-only',
         serviceName: 'honyo',
       }),
     );
@@ -246,14 +246,6 @@ export class CodexAppServer {
             model,
             cwd: app.getPath('temp'),
             approvalPolicy: 'never',
-            sandboxPolicy: {
-              type: 'readOnly',
-              access: {
-                type: 'restricted',
-                includePlatformDefaults: false,
-                readableRoots: [],
-              },
-            },
           },
           TRANSLATION_TIMEOUT_MS,
         ),
@@ -307,6 +299,10 @@ export class CodexAppServer {
         name: 'honyo',
         title: 'Honyo',
         version: app.getVersion(),
+      },
+      capabilities: {
+        experimentalApi: true,
+        requestAttestation: false,
       },
     });
     this.notify('initialized', {});
