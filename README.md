@@ -269,6 +269,19 @@ npm start
 | `npm run dist:win` | Build and package for Windows |
 | `npm run dist:linux` | Build and package for Linux |
 
+### macOS accessibility after a local rebuild
+
+An unsigned or ad-hoc-signed rebuild changes the app's code signature. If macOS keeps requesting
+accessibility permission even though Honyo is enabled, reset only Honyo's stale permission:
+
+```bash
+tccutil reset Accessibility com.rot1024.honyo
+```
+
+Then launch `/Applications/Honyo.app` and enable it again under **System Settings → Privacy &
+Security → Accessibility**. Do not run this for every build; it is only needed when macOS retains
+permission for an older signature.
+
 ### Project Structure
 
 ```

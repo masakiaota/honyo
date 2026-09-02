@@ -738,7 +738,7 @@ For example:
         fastMode.disabled = !settings.fastModeServiceTier;
         fastMode.checked = Boolean(settings.fastMode);
         help.textContent = supported
-          ? 'The selected model's available values are shown here. The model default is used when no effort is selected.'
+          ? "The selected model's available values are shown here. The model default is used when no effort is selected."
           : 'The selected model does not expose configurable reasoning effort.';
         fastHelp.textContent = settings.fastModeServiceTier
           ? `Uses ${settings.fastModeServiceTier.name}${settings.fastModeServiceTier.description ? `: ${settings.fastModeServiceTier.description}` : ''}.`
