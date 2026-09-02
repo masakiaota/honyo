@@ -7,7 +7,7 @@ import { languages } from '../language/constants.ts';
 import { getAIProvider } from './providers.ts';
 import { getConfig, getApiKeys } from '../config/index.ts';
 import type { Config, ApiKeys } from '../config/types.ts';
-import { getOpenAIProviderOptions } from '../reasoning-effort.ts';
+import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
 import { runCodexText } from '../codex/index.ts';
 import { getCodexModelId, isCodexModelKey } from '../codex/models.ts';
@@ -126,7 +126,13 @@ async function translateWithCodex(
     config.customPrompt,
     config.customLanguages,
   );
-  const raw = await runCodexText(model, buildCodexPrompt(systemPrompt, text), undefined, signal);
+  const raw = await runCodexText(
+    model,
+    buildCodexPrompt(systemPrompt, text),
+    getCodexTurnOptions(config),
+    undefined,
+    signal,
+  );
   const parsed = parseTranslationOutput(raw.trim());
   return { ...parsed, translation: parsed.translation.trim() };
 }
@@ -299,6 +305,7 @@ export async function translateTextStreaming(
       const raw = await runCodexText(
         model,
         buildCodexPrompt(systemPrompt, text),
+        getCodexTurnOptions(config),
         delta => {
           fullRaw += delta;
           if (!headerResolved) {

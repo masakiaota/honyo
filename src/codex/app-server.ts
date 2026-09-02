@@ -12,6 +12,11 @@ const TRANSLATION_TIMEOUT_MS = 120_000;
 
 type JsonObject = Record<string, unknown>;
 
+export interface CodexTurnOptions {
+  effort?: string;
+  serviceTier?: string;
+}
+
 export interface CodexAccount {
   type?: string;
   email?: string;
@@ -146,10 +151,31 @@ export class CodexAppServer {
           const id = stringValue(item.id);
           const model = stringValue(item.model);
           const displayName = stringValue(item.displayName);
+          const supportedReasoningEfforts = Array.isArray(item.supportedReasoningEfforts)
+            ? item.supportedReasoningEfforts.flatMap(entry => {
+                const option = asObject(entry);
+                const reasoningEffort = stringValue(option?.reasoningEffort);
+                if (!reasoningEffort) return [];
+                const description = stringValue(option?.description);
+                return description ? [{ reasoningEffort, description }] : [{ reasoningEffort }];
+              })
+            : undefined;
+          const serviceTiers = Array.isArray(item.serviceTiers)
+            ? item.serviceTiers.flatMap(entry => {
+                const tier = asObject(entry);
+                const id = stringValue(tier?.id);
+                const name = stringValue(tier?.name);
+                if (!id || !name) return [];
+                const description = stringValue(tier?.description);
+                return [{ id, name, ...(description ? { description } : {}) }];
+              })
+            : undefined;
           models.push({
             ...(id ? { id } : {}),
             ...(model ? { model } : {}),
             ...(displayName ? { displayName } : {}),
+            ...(supportedReasoningEfforts?.length ? { supportedReasoningEfforts } : {}),
+            ...(serviceTiers?.length ? { serviceTiers } : {}),
           });
         }
       }
@@ -162,6 +188,7 @@ export class CodexAppServer {
   async runText(
     model: string,
     prompt: string,
+    options: CodexTurnOptions | undefined,
     onDelta?: (delta: string) => void,
     signal?: AbortSignal,
   ): Promise<string> {
@@ -246,6 +273,8 @@ export class CodexAppServer {
             model,
             cwd: app.getPath('temp'),
             approvalPolicy: 'never',
+            ...(options?.effort ? { effort: options.effort } : {}),
+            ...(options?.serviceTier ? { serviceTier: options.serviceTier } : {}),
           },
           TRANSLATION_TIMEOUT_MS,
         ),

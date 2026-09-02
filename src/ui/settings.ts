@@ -19,12 +19,14 @@ import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
 import { isValidMaxInputCharacters } from '../input-character-limit.ts';
 import {
+  getCodexTurnOptions,
+  getFastModeServiceTier,
+  getReasoningEffortOptions,
+  getSelectedReasoningEffort,
   getOpenAIProviderOptions,
   getSelectedModelInfo,
-  supportsOpenAIFastMode,
-  supportsOpenAIReasoningEffort,
+  isFastModeEnabled,
 } from '../reasoning-effort.ts';
-import { OPENAI_REASONING_EFFORTS } from '../config/types.ts';
 import {
   getCodexConnectionState,
   logoutCodex,
@@ -205,13 +207,14 @@ export function setupSettingsIPC(): void {
     if (!isSettingsEvent(event)) return;
     const config = getConfig();
     const modelInfo = getSelectedModelInfo(config);
-    const supported = supportsOpenAIReasoningEffort(modelInfo);
+    const reasoningEffortOptions = getReasoningEffortOptions(modelInfo);
+    const fastModeServiceTier = getFastModeServiceTier(modelInfo);
     event.reply('openai-reasoning-effort-loaded', {
       modelName: modelInfo?.name ?? 'Unknown model',
-      supported,
-      effort: supported && modelInfo ? config.openaiReasoningEfforts?.[modelInfo.model] : undefined,
-      fastSupported: supportsOpenAIFastMode(modelInfo),
-      fastMode: modelInfo ? config.openaiFastModels?.includes(modelInfo.model) : false,
+      reasoningEffortOptions,
+      effort: getSelectedReasoningEffort(config),
+      fastModeServiceTier,
+      fastMode: isFastModeEnabled(config),
     });
   });
 
@@ -224,42 +227,56 @@ export function setupSettingsIPC(): void {
 
     const config = getConfig();
     const modelInfo = getSelectedModelInfo(config);
-    if (!modelInfo || !supportsOpenAIFastMode(modelInfo)) {
+    if (!modelInfo || !getFastModeServiceTier(modelInfo)) {
       event.reply('openai-fast-mode-saved', false);
       return;
     }
 
-    const fastModels = new Set(config.openaiFastModels);
+    const fastModels = new Set(
+      modelInfo.provider === 'codex' ? config.codexFastModels : config.openaiFastModels,
+    );
     if (enabled) {
       fastModels.add(modelInfo.model);
     } else {
       fastModels.delete(modelInfo.model);
     }
-    updateConfig({ openaiFastModels: [...fastModels] });
+    updateConfig(
+      modelInfo.provider === 'codex'
+        ? { codexFastModels: [...fastModels] }
+        : { openaiFastModels: [...fastModels] },
+    );
     event.reply('openai-fast-mode-saved', true);
   });
 
-  ipcMain.on('save-openai-reasoning-effort', (event, effort: OpenAIReasoningEffort | null) => {
+  ipcMain.on('save-openai-reasoning-effort', (event, effort: string | null) => {
     if (!isSettingsEvent(event)) return;
-    if (effort !== null && !OPENAI_REASONING_EFFORTS.includes(effort)) {
-      event.reply('openai-reasoning-effort-saved', false);
-      return;
-    }
-
     const config = getConfig();
     const modelInfo = getSelectedModelInfo(config);
-    if (!modelInfo || !supportsOpenAIReasoningEffort(modelInfo)) {
+    const reasoningEffortOptions = getReasoningEffortOptions(modelInfo);
+    if (
+      !modelInfo ||
+      reasoningEffortOptions.length === 0 ||
+      (effort !== null && !reasoningEffortOptions.some(option => option.reasoningEffort === effort))
+    ) {
       event.reply('openai-reasoning-effort-saved', false);
       return;
     }
 
-    const efforts = { ...config.openaiReasoningEfforts };
+    const efforts = {
+      ...(modelInfo.provider === 'codex'
+        ? config.codexReasoningEfforts
+        : config.openaiReasoningEfforts),
+    };
     if (effort === null) {
       delete efforts[modelInfo.model];
     } else {
       efforts[modelInfo.model] = effort;
     }
-    updateConfig({ openaiReasoningEfforts: efforts });
+    updateConfig(
+      modelInfo.provider === 'codex'
+        ? { codexReasoningEfforts: efforts }
+        : { openaiReasoningEfforts: efforts as Partial<Record<string, OpenAIReasoningEffort>> },
+    );
     event.reply('openai-reasoning-effort-saved', true);
   });
 
@@ -371,6 +388,7 @@ Rules:
             const text = await runCodexText(
               codexModel,
               `${systemPrompt}\n\nDo not use tools.\n\n${userPrompt}`,
+              getCodexTurnOptions(config),
             );
             event.reply('custom-prompt-generated', { success: true, prompt: text.trim() });
             return;

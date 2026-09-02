@@ -1,4 +1,9 @@
-import { CodexAppServer, type CodexAccount, type CodexNotification } from './app-server.ts';
+import {
+  CodexAppServer,
+  type CodexAccount,
+  type CodexNotification,
+  type CodexTurnOptions,
+} from './app-server.ts';
 import { DEFAULT_AI_MODEL } from '../models.ts';
 import { getConfig, updateConfig } from '../config/index.ts';
 import { getCodexModelId, toCodexModels } from './models.ts';
@@ -122,6 +127,7 @@ export async function logoutCodex(): Promise<void> {
 export async function runCodexText(
   model: string,
   prompt: string,
+  options: CodexTurnOptions | undefined,
   onDelta?: (delta: string) => void,
   signal?: AbortSignal,
 ): Promise<string> {
@@ -132,8 +138,10 @@ export async function runCodexText(
   if (state.status !== 'connected') {
     throw new Error('ChatGPT/Codex account is not connected');
   }
-  return client.runText(model, prompt, onDelta, signal);
+  return client.runText(model, prompt, options, onDelta, signal);
 }
+
+export type { CodexTurnOptions };
 
 export function shutdownCodex(): void {
   client.stop();

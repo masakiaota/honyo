@@ -28,4 +28,25 @@ describe('Codex model catalog', () => {
     expect(isCodexModelKey('gpt-5.6-sol')).toBe(false);
     expect(getCodexModelId('codex:')).toBeUndefined();
   });
+
+  it('preserves account-specific reasoning and service-tier capabilities', () => {
+    const models = toCodexModels([
+      {
+        model: 'gpt-5.6-sol',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Fast responses' },
+          { reasoningEffort: 'ultra', description: 'Maximum reasoning' },
+        ],
+        serviceTiers: [{ id: 'priority', name: 'Fast', description: '1.5x speed' }],
+      },
+    ]);
+
+    expect(models['codex:gpt-5.6-sol']).toMatchObject({
+      reasoningEffortOptions: [
+        { reasoningEffort: 'low', description: 'Fast responses' },
+        { reasoningEffort: 'ultra', description: 'Maximum reasoning' },
+      ],
+      serviceTiers: [{ id: 'priority', name: 'Fast', description: '1.5x speed' }],
+    });
+  });
 });

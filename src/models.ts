@@ -1,9 +1,22 @@
 export type AIProvider = 'anthropic' | 'openai' | 'google' | 'codex';
 
+export interface ReasoningEffortOption {
+  reasoningEffort: string;
+  description?: string;
+}
+
+export interface ModelServiceTier {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface AIModelInfo {
   name: string;
   provider: AIProvider;
   model: string;
+  reasoningEffortOptions?: ReasoningEffortOption[];
+  serviceTiers?: ModelServiceTier[];
 }
 
 export const AI_MODELS: Record<string, AIModelInfo> = {

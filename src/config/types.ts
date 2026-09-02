@@ -27,6 +27,8 @@ export interface Config {
   customModel?: CustomModel;
   openaiReasoningEfforts?: Partial<Record<string, OpenAIReasoningEffort>>;
   openaiFastModels?: string[];
+  codexReasoningEfforts?: Partial<Record<string, string>>;
+  codexFastModels?: string[];
   customLanguages?: string[];
   skippedUpdateVersion?: string;
   enableStreaming?: boolean;

@@ -318,16 +318,10 @@
             <div class="help-text" id="selected-model-name"></div>
             <select id="openai-reasoning-effort" disabled>
               <option value="">Use the model default</option>
-              <option value="none">None — lowest latency</option>
-              <option value="low">Low — faster responses</option>
-              <option value="medium">Medium — balanced</option>
-              <option value="high">High — more reasoning</option>
-              <option value="xhigh">Extra high — more reasoning</option>
-              <option value="max">Max — quality first</option>
             </select>
             <div class="help-text" id="openai-reasoning-effort-help">
-              Available for OpenAI GPT-5 and o-series models. The model default is used when no
-              effort is selected.
+              The selected model's available values are shown here. The model default is used when
+              no effort is selected.
             </div>
           </div>
 
@@ -340,8 +334,7 @@
             id="openai-fast-mode-help"
             style="margin-top: -15px; margin-left: 28px"
           >
-            Sends this GPT-5.6 model through OpenAI's priority processing tier. Fast mode has a
-            higher per-token price.
+            Uses the selected model's faster service tier when available.
           </div>
 
           <div class="status" id="model-status"></div>
@@ -712,7 +705,19 @@ For example:
         }
       });
 
-      // OpenAI reasoning effort functionality
+      function reasoningEffortLabel(effort) {
+        const labels = {
+          none: 'None — lowest latency',
+          low: 'Low — faster responses',
+          medium: 'Medium — balanced',
+          high: 'High — more reasoning',
+          xhigh: 'Extra high — more reasoning',
+          max: 'Max — quality first',
+          ultra: 'Ultra — maximum reasoning',
+        };
+        return labels[effort] || effort;
+      }
+
       ipcRenderer.on('openai-reasoning-effort-loaded', (event, settings) => {
         const select = document.getElementById('openai-reasoning-effort');
         const modelName = document.getElementById('selected-model-name');
@@ -720,17 +725,24 @@ For example:
         const fastMode = document.getElementById('openai-fast-mode');
         const fastHelp = document.getElementById('openai-fast-mode-help');
         modelName.textContent = `Selected model: ${settings.modelName}`;
-        select.disabled = !settings.supported;
+        select.replaceChildren(new Option('Use the model default', ''));
+        for (const option of settings.reasoningEffortOptions) {
+          const label = option.description
+            ? `${reasoningEffortLabel(option.reasoningEffort)} — ${option.description}`
+            : reasoningEffortLabel(option.reasoningEffort);
+          select.add(new Option(label, option.reasoningEffort));
+        }
+        const supported = settings.reasoningEffortOptions.length > 0;
+        select.disabled = !supported;
         select.value = settings.effort || '';
-        fastMode.disabled = !settings.fastSupported;
+        fastMode.disabled = !settings.fastModeServiceTier;
         fastMode.checked = Boolean(settings.fastMode);
-        if (!settings.supported) {
-          help.textContent =
-            'Select an OpenAI GPT-5 or o-series model to configure reasoning effort.';
-        }
-        if (!settings.fastSupported) {
-          fastHelp.textContent = 'Fast mode is available for OpenAI GPT-5.6 models only.';
-        }
+        help.textContent = supported
+          ? 'The selected model's available values are shown here. The model default is used when no effort is selected.'
+          : 'The selected model does not expose configurable reasoning effort.';
+        fastHelp.textContent = settings.fastModeServiceTier
+          ? `Uses ${settings.fastModeServiceTier.name}${settings.fastModeServiceTier.description ? `: ${settings.fastModeServiceTier.description}` : ''}.`
+          : 'The selected model does not expose a faster service tier.';
       });
 
       function saveOpenAIReasoningEffort() {
