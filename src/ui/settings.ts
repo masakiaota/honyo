@@ -296,6 +296,7 @@ export function setupSettingsIPC(): void {
     if (!isSettingsEvent(event)) return;
     const config = getConfig();
     event.reply('auto-close-on-blur-loaded', config.autoCloseOnBlur ?? true);
+    event.reply('auto-close-after-five-minutes-loaded', config.autoCloseAfterFiveMinutes ?? true);
     event.reply('enable-streaming-loaded', config.enableStreaming ?? true);
     event.reply('popup-font-size-loaded', config.popupFontSize ?? 14);
     event.reply('max-input-characters-loaded', config.maxInputCharacters);
@@ -313,6 +314,7 @@ export function setupSettingsIPC(): void {
       event,
       settings: {
         autoCloseOnBlur: boolean;
+        autoCloseAfterFiveMinutes: boolean;
         enableStreaming: boolean;
         popupFontSize?: number;
         maxInputCharacters: number;
@@ -325,6 +327,7 @@ export function setupSettingsIPC(): void {
       }
       const updates: Partial<Config> = {
         autoCloseOnBlur: settings.autoCloseOnBlur,
+        autoCloseAfterFiveMinutes: settings.autoCloseAfterFiveMinutes,
         enableStreaming: settings.enableStreaming,
         maxInputCharacters: settings.maxInputCharacters,
       };

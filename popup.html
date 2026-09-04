@@ -92,6 +92,62 @@
         gap: 8px;
         -webkit-app-region: no-drag;
       }
+      .timer-control {
+        display: inline-flex;
+        min-width: 82px;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-primary);
+        color: var(--btn-primary);
+        cursor: pointer;
+      }
+      .timer-control[hidden] {
+        display: none;
+      }
+      .timer-control:hover {
+        background: var(--bg-secondary);
+      }
+      .timer-time {
+        min-width: 30px;
+        color: var(--text-primary);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .timer-progress {
+        width: 32px;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: var(--border-color);
+      }
+      .timer-progress-fill {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--btn-primary);
+        transition: width 0.2s ease;
+      }
+      .timer-icon {
+        width: 12px;
+        height: 12px;
+        flex-shrink: 0;
+      }
+      .timer-control[data-urgency='warning'] {
+        color: #d99a00;
+      }
+      .timer-control[data-urgency='warning'] .timer-progress-fill {
+        background: #d99a00;
+      }
+      .timer-control[data-urgency='critical'] {
+        color: #d94444;
+      }
+      .timer-control[data-urgency='critical'] .timer-progress-fill {
+        background: #d94444;
+      }
       .header-btn {
         padding: 4px 12px;
         font-size: 11px;
@@ -257,6 +313,24 @@
           transform: rotate(360deg);
         }
       }
+      @media (max-width: 420px) {
+        .header {
+          justify-content: flex-end;
+        }
+        .header-title {
+          display: none;
+        }
+        .header-buttons {
+          width: 100%;
+          justify-content: flex-end;
+          gap: 5px;
+        }
+        .copy-btn {
+          gap: 0;
+          padding: 6px 8px;
+          font-size: 0;
+        }
+      }
     </style>
   </head>
   <body>
@@ -275,6 +349,30 @@
           <span id="header-title-text">Honyo Translator</span>
         </span>
         <div class="header-buttons">
+          <button
+            class="timer-control"
+            id="timer-control"
+            onclick="extendPopupTimeout()"
+            title="Click to reset the remaining time to 5:00"
+            aria-label="5 minutes remaining. Click to reset the remaining time to 5:00"
+            data-urgency="normal"
+            hidden
+          >
+            <span class="timer-time" id="timer-time">5:00</span>
+            <span class="timer-progress" aria-hidden="true">
+              <span class="timer-progress-fill" id="timer-progress-fill"></span>
+            </span>
+            <svg class="timer-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M12.5 6.5V3.75m0 0H9.75m2.75 0-1.9 1.9A5 5 0 1 0 13 10"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </button>
           <button
             class="back-btn header-btn"
             id="back-btn"
@@ -299,7 +397,11 @@
               />
             </svg>
           </button>
-          <button class="copy-btn header-btn" onclick="copyTranslation()">
+          <button
+            class="copy-btn header-btn"
+            onclick="copyTranslation()"
+            aria-label="Copy translation"
+          >
             <svg
               class="btn-icon"
               viewBox="0 0 16 16"
@@ -350,6 +452,7 @@
       // Detected language pairs ({ source, target }) for each view, when known.
       let currentLangs = null; // for the translation view
       let backLangs = null; // for the back-translation view
+      let isPopupTimerEnabled = false;
 
       function formatLangs(l) {
         return l.source + ' → ' + l.target;
@@ -385,10 +488,40 @@
         document.getElementById('translation-text').style.fontSize = size + 'px';
       }
 
+      function updatePopupTimer(data) {
+        if (!isPopupTimerEnabled || !data || typeof data.remainingSeconds !== 'number') return;
+        const seconds = Math.max(0, Math.min(300, Math.trunc(data.remainingSeconds)));
+        const minutes = Math.floor(seconds / 60);
+        const remainder = String(seconds % 60).padStart(2, '0');
+        const urgency =
+          data.urgency === 'warning' || data.urgency === 'critical' ? data.urgency : 'normal';
+        const control = document.getElementById('timer-control');
+        document.getElementById('timer-time').textContent = `${minutes}:${remainder}`;
+        document.getElementById('timer-progress-fill').style.width = `${(seconds / 300) * 100}%`;
+        control.dataset.urgency = urgency;
+        control.title = 'Click to reset the remaining time to 5:00';
+        control.setAttribute(
+          'aria-label',
+          `${minutes} minutes ${Number(remainder)} seconds remaining. Click to reset the remaining time to 5:00`,
+        );
+      }
+
+      function extendPopupTimeout() {
+        if (!isPopupTimerEnabled) return;
+        updatePopupTimer({ remainingSeconds: 300, urgency: 'normal' });
+        ipcRenderer.send('extend-popup-timeout');
+      }
+
       // Receive popup display config (font size)
       ipcRenderer.on('popup-config', (event, cfg) => {
         const size = cfg && typeof cfg.fontSize === 'number' ? cfg.fontSize : 14;
         applyFontSize(size);
+        isPopupTimerEnabled = !!(cfg && cfg.autoCloseAfterFiveMinutes);
+        document.getElementById('timer-control').hidden = !isPopupTimerEnabled;
+      });
+
+      ipcRenderer.on('popup-time-remaining', (event, data) => {
+        updatePopupTimer(data);
       });
 
       // Enable the toggle only when there is a finished translation and nothing

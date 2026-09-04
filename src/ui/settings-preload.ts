@@ -41,6 +41,7 @@ const receiveChannels = new Set([
   'custom-languages-loaded',
   'custom-languages-saved',
   'auto-close-on-blur-loaded',
+  'auto-close-after-five-minutes-loaded',
   'enable-streaming-loaded',
   'popup-font-size-loaded',
   'max-input-characters-loaded',

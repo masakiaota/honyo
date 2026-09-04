@@ -154,10 +154,11 @@ Configure popup window and translation display behavior:
 
 1. Open Settings → "General" tab
 2. **Auto-close on blur**: Enable this option to automatically close the popup window when it loses focus
-3. **Enable streaming**: Enable this option to see translations appear progressively as the AI generates them (popup mode only)
-4. **Popup font size**: Set the translation text size in the popup (10–24px)
-5. **Reset Popup Size**: Restore the popup window to its default size
-6. Click "Save"
+3. **Auto-close after 5 minutes**: Show a countdown in the popup header and automatically close it after 5 minutes
+4. **Enable streaming**: Enable this option to see translations appear progressively as the AI generates them (popup mode only)
+5. **Popup font size**: Set the translation text size in the popup (10–24px)
+6. **Reset Popup Size**: Restore the popup window to its default size
+7. Click "Save"
 
 **Display Modes:**
 - **Notification & Copy**: Translation result appears as a system notification and is automatically copied to clipboard
@@ -168,6 +169,7 @@ Configure popup window and translation display behavior:
   - Copy button and keyboard shortcuts (Enter to copy, Escape to close)
   - Right-click context menu for copying selected text or all text
   - Resizable window — the size is remembered across closes
+  - Optional five-minute timeout with a header countdown bar — click it to reset to five minutes
   - Auto-return focus to previous application when closed
 
 ## Usage

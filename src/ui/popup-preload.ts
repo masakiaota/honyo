@@ -5,10 +5,12 @@ const sendChannels = new Set([
   'back-translate',
   'copy-translation',
   'close-popup',
+  'extend-popup-timeout',
 ]);
 
 const receiveChannels = new Set([
   'popup-config',
+  'popup-time-remaining',
   'translation-loading',
   'translation-langs',
   'translation-data',

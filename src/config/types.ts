@@ -21,6 +21,7 @@ export interface Config {
   isPaused: boolean;
   aiModel: string;
   autoCloseOnBlur?: boolean;
+  autoCloseAfterFiveMinutes?: boolean;
   customPrompt: string;
   maxInputCharacters: number;
   displayMode: DisplayMode;
