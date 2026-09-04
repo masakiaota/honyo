@@ -434,6 +434,16 @@ Ancient Greek"
           </div>
 
           <div class="checkbox-group" style="margin-top: 20px">
+            <input type="checkbox" id="auto-close-after-five-minutes" />
+            <label for="auto-close-after-five-minutes" class="checkbox-label">
+              Automatically close translation popup after 5 minutes
+            </label>
+          </div>
+          <div class="help-text" style="margin-top: -15px; margin-left: 28px">
+            When enabled, the popup shows its remaining time and can be extended back to 5 minutes.
+          </div>
+
+          <div class="checkbox-group" style="margin-top: 20px">
             <input type="checkbox" id="enable-streaming" />
             <label for="enable-streaming" class="checkbox-label">
               Enable streaming for popup translations
@@ -572,6 +582,9 @@ For example:
           .addEventListener('input', () => (pendingChanges.customLanguages = true));
         document
           .getElementById('auto-close-on-blur')
+          .addEventListener('change', () => (pendingChanges.display = true));
+        document
+          .getElementById('auto-close-after-five-minutes')
           .addEventListener('change', () => (pendingChanges.display = true));
         document
           .getElementById('enable-streaming')
@@ -803,6 +816,10 @@ For example:
         document.getElementById('auto-close-on-blur').checked = autoCloseOnBlur;
       });
 
+      ipcRenderer.on('auto-close-after-five-minutes-loaded', (event, enabled) => {
+        document.getElementById('auto-close-after-five-minutes').checked = enabled;
+      });
+
       ipcRenderer.on('enable-streaming-loaded', (event, enableStreaming) => {
         document.getElementById('enable-streaming').checked = enableStreaming;
       });
@@ -834,6 +851,9 @@ For example:
 
       function saveDisplaySettings() {
         const autoCloseOnBlur = document.getElementById('auto-close-on-blur').checked;
+        const autoCloseAfterFiveMinutes = document.getElementById(
+          'auto-close-after-five-minutes',
+        ).checked;
         const enableStreaming = document.getElementById('enable-streaming').checked;
         let popupFontSize = parseInt(document.getElementById('popup-font-size').value, 10);
         if (Number.isNaN(popupFontSize)) popupFontSize = 14;
@@ -846,6 +866,7 @@ For example:
         }
         ipcRenderer.send('save-display-settings', {
           autoCloseOnBlur,
+          autoCloseAfterFiveMinutes,
           enableStreaming,
           popupFontSize,
           maxInputCharacters,

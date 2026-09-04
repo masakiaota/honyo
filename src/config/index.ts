@@ -49,6 +49,7 @@ function getDefaultConfig(): Config {
     isPaused: false,
     aiModel: DEFAULT_AI_MODEL,
     autoCloseOnBlur: true,
+    autoCloseAfterFiveMinutes: true,
     enableStreaming: true,
     customPrompt: '',
     maxInputCharacters: DEFAULT_MAX_INPUT_CHARACTERS,
@@ -95,6 +96,11 @@ export function initializeConfig(): void {
   // Initialize autoCloseOnBlur if not present
   if (config.autoCloseOnBlur === undefined) {
     config.autoCloseOnBlur = true;
+  }
+
+  // Initialize popup timeout if not present
+  if (config.autoCloseAfterFiveMinutes === undefined) {
+    config.autoCloseAfterFiveMinutes = true;
   }
 
   // Initialize enableStreaming if not present

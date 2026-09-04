@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { cancelCurrentTranslation } from '../keyboard/handler.ts';
 import { getConfig, updateConfig } from '../config/index.ts';
 import { translateTextDetailed } from '../translation/index.ts';
+import { PopupTimer } from './popup-timer.ts';
 
 const DEFAULT_POPUP_WIDTH = 400;
 const DEFAULT_POPUP_HEIGHT = 200;
@@ -26,10 +27,20 @@ const currentDir = getCurrentDir();
 
 let popupWindow: BrowserWindow | null = null;
 let previousActiveApp: string | null = null;
+let restorePreviousAppOnClose = true;
 // Language pair of the current translation. Kept here because it can be
 // resolved while a freshly-created popup window is still loading — IPC sent
 // before did-finish-load is dropped, so it is re-sent once the page is ready.
 let pendingLanguages: { sourceLanguage: string; targetLanguage: string } | null = null;
+
+const popupTimer = new PopupTimer(
+  (remainingSeconds, urgency) => {
+    if (popupWindow && !popupWindow.isDestroyed()) {
+      popupWindow.webContents.send('popup-time-remaining', { remainingSeconds, urgency });
+    }
+  },
+  () => closePopup(false),
+);
 
 function getPreloadPath(): string {
   return app.isPackaged
@@ -48,7 +59,19 @@ function sendPopupConfig(): void {
   const config = getConfig();
   popupWindow.webContents.send('popup-config', {
     fontSize: config.popupFontSize ?? 14,
+    autoCloseAfterFiveMinutes: config.autoCloseAfterFiveMinutes ?? true,
   });
+}
+
+function resetPopupTimer(): void {
+  popupTimer.stop();
+  if (
+    popupWindow &&
+    !popupWindow.isDestroyed() &&
+    (getConfig().autoCloseAfterFiveMinutes ?? true)
+  ) {
+    popupTimer.start();
+  }
 }
 
 // Resolve the initial popup size from config (persisted size, or the default),
@@ -99,15 +122,16 @@ function capturePreviousApp(): void {
 
 // Function to restore focus to the previous application
 function restorePreviousApp(): void {
-  if (process.platform === 'darwin' && previousActiveApp && previousActiveApp !== 'Electron') {
-    exec(`osascript -e 'tell application "${previousActiveApp}" to activate'`, error => {
+  const appToRestore = previousActiveApp;
+  previousActiveApp = null;
+  if (process.platform === 'darwin' && appToRestore && appToRestore !== 'Electron') {
+    exec(`osascript -e 'tell application "${appToRestore}" to activate'`, error => {
       if (error) {
         console.error('Failed to restore previous app:', error);
       } else {
-        console.log('Restored focus to:', previousActiveApp);
+        console.log('Restored focus to:', appToRestore);
       }
     });
-    previousActiveApp = null;
   }
 }
 
@@ -137,6 +161,8 @@ export function showTranslationPopup(translation: string | null, originalText: s
         originalText,
       });
     }
+
+    resetPopupTimer();
 
     // Focus the window
     popupWindow.focus();
@@ -186,6 +212,7 @@ export function showTranslationPopup(translation: string | null, originalText: s
   // Send initial state once loaded
   popupWindow.webContents.once('did-finish-load', () => {
     sendPopupConfig();
+    popupTimer.publish();
     if (translation === null) {
       popupWindow?.webContents.send('translation-loading');
     } else {
@@ -201,19 +228,24 @@ export function showTranslationPopup(translation: string | null, originalText: s
     }
   });
 
+  resetPopupTimer();
+
   // Add blur event handler based on user preference
   const config = getConfig();
   if (config.autoCloseOnBlur) {
     popupWindow.on('blur', () => {
-      if (popupWindow && !popupWindow.isDestroyed()) {
-        popupWindow.close();
-      }
+      closePopup();
     });
   }
 
   popupWindow.on('closed', () => {
-    // Restore focus to the previous application when popup closes
-    restorePreviousApp();
+    popupTimer.stop();
+    if (restorePreviousAppOnClose) {
+      restorePreviousApp();
+    } else {
+      previousActiveApp = null;
+    }
+    restorePreviousAppOnClose = true;
     popupWindow = null;
   });
 }
@@ -252,9 +284,7 @@ export function setupPopupIPC(): void {
       try {
         await writeClipboardText(text);
       } finally {
-        if (popupWindow && !popupWindow.isDestroyed()) {
-          popupWindow.close();
-        }
+        closePopup();
       }
     })();
   });
@@ -263,9 +293,12 @@ export function setupPopupIPC(): void {
     if (!isPopupEvent(event)) return;
     // Cancel any ongoing translation when closing popup
     cancelCurrentTranslation();
-    if (popupWindow && !popupWindow.isDestroyed()) {
-      popupWindow.close();
-    }
+    closePopup();
+  });
+
+  ipcMain.on('extend-popup-timeout', event => {
+    if (!isPopupEvent(event)) return;
+    resetPopupTimer();
   });
 
   ipcMain.on('back-translate', (event, text: string) => {
@@ -331,8 +364,10 @@ export function setupPopupIPC(): void {
   );
 }
 
-export function closePopup(): void {
+export function closePopup(restoreFocus = true): void {
+  popupTimer.stop();
   if (popupWindow && !popupWindow.isDestroyed()) {
+    restorePreviousAppOnClose = restoreFocus;
     popupWindow.close();
   }
 }
