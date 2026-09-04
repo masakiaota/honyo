@@ -365,6 +365,7 @@ export function setupPopupIPC(): void {
 }
 
 export function closePopup(restoreFocus = true): void {
+  popupTimer.stop();
   if (popupWindow && !popupWindow.isDestroyed()) {
     restorePreviousAppOnClose = restoreFocus;
     popupWindow.close();

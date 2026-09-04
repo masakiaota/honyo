@@ -20,7 +20,7 @@ export class PopupTimer {
 
   start(): void {
     this.stop();
-    this.deadline = Date.now() + POPUP_AUTO_CLOSE_DURATION_MS;
+    this.deadline = performance.now() + POPUP_AUTO_CLOSE_DURATION_MS;
     this.publish();
     this.interval = setInterval(() => this.publish(), 1_000);
     this.timeout = setTimeout(() => {
@@ -43,7 +43,7 @@ export class PopupTimer {
 
   publish(): void {
     if (this.deadline === null) return;
-    const remainingSeconds = Math.max(0, Math.ceil((this.deadline - Date.now()) / 1_000));
+    const remainingSeconds = Math.max(0, Math.ceil((this.deadline - performance.now()) / 1_000));
     this.onTick(remainingSeconds, getPopupTimerUrgency(remainingSeconds));
   }
 }

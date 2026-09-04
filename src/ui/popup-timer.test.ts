@@ -50,6 +50,17 @@ describe('PopupTimer', () => {
     expect(onExpire).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps its remaining time when the system clock changes', () => {
+    const onTick = vi.fn();
+    const timer = new PopupTimer(onTick, vi.fn());
+
+    timer.start();
+    vi.setSystemTime(new Date('2026-09-05T01:00:00Z'));
+    timer.publish();
+
+    expect(onTick).toHaveBeenLastCalledWith(300, 'normal');
+  });
+
   it('does not expire after it is stopped', () => {
     const onExpire = vi.fn();
     const timer = new PopupTimer(vi.fn(), onExpire);

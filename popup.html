@@ -493,6 +493,9 @@
         const seconds = Math.max(0, Math.min(300, Math.trunc(data.remainingSeconds)));
         const minutes = Math.floor(seconds / 60);
         const remainder = String(seconds % 60).padStart(2, '0');
+        const minuteLabel = minutes === 1 ? 'minute' : 'minutes';
+        const secondCount = Number(remainder);
+        const secondLabel = secondCount === 1 ? 'second' : 'seconds';
         const urgency =
           data.urgency === 'warning' || data.urgency === 'critical' ? data.urgency : 'normal';
         const control = document.getElementById('timer-control');
@@ -502,7 +505,7 @@
         control.title = 'Click to reset the remaining time to 5:00';
         control.setAttribute(
           'aria-label',
-          `${minutes} minutes ${Number(remainder)} seconds remaining. Click to reset the remaining time to 5:00`,
+          `${minutes} ${minuteLabel} ${secondCount} ${secondLabel} remaining. Click to reset the remaining time to 5:00`,
         );
       }
 
