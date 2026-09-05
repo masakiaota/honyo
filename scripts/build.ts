@@ -8,10 +8,9 @@
 // 4. Use src/*.ts files directly without compilation
 
 import esbuild from 'esbuild';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, rmSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { readdirSync, statSync, rmSync, mkdirSync } from 'fs';
 import { execFileSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);

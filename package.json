@@ -15,7 +15,7 @@
     "lint:fix": "eslint src/**/*.ts --fix --cache",
     "format": "prettier --write \"src/**/*.ts\" \"*.html\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"*.html\"",
-    "test": "vitest run --reporter=blob --outputFile=/dev/null",
+    "test": "vitest run --reporter=blob",
     "test:verbose": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui --api.host 127.0.0.1",
