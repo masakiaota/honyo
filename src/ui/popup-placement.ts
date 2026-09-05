@@ -115,7 +115,11 @@ function getSelectionCandidates(
   ];
 }
 
-function getSelectionPlacement(visibleSelection: Rectangle, workArea: Rectangle, popupSize: Size): Point {
+function getSelectionPlacement(
+  visibleSelection: Rectangle,
+  workArea: Rectangle,
+  popupSize: Size,
+): Point {
   const range = getPositionRange(workArea, popupSize);
   const candidates = getSelectionCandidates(visibleSelection, popupSize, range);
 

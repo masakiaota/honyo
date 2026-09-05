@@ -389,7 +389,10 @@ export function closePopup(restoreFocus = true): void {
   }
 }
 
-function repositionPopup(selectionBounds: SelectionBounds | null, cursorPoint: { x: number; y: number }): void {
+function repositionPopup(
+  selectionBounds: SelectionBounds | null,
+  cursorPoint: { x: number; y: number },
+): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
 
   const [width = DEFAULT_POPUP_WIDTH, height = DEFAULT_POPUP_HEIGHT] = popupWindow.getSize();
