@@ -6,6 +6,8 @@ import { cancelCurrentTranslation } from '../keyboard/handler.ts';
 import { getConfig, updateConfig } from '../config/index.ts';
 import { translateTextDetailed } from '../translation/index.ts';
 import { PopupTimer } from './popup-timer.ts';
+import { getPopupPlacement, getSelectionWorkAreaIndex } from './popup-placement.ts';
+import { getSelectionBounds, type SelectionBounds } from './selection-anchor.ts';
 
 const DEFAULT_POPUP_WIDTH = 400;
 const DEFAULT_POPUP_HEIGHT = 200;
@@ -76,7 +78,7 @@ function resetPopupTimer(): void {
 
 // Resolve the initial popup size from config (persisted size, or the default),
 // clamped to the minimum and the display work area.
-function getInitialPopupSize(cursorPoint: { x: number; y: number }): {
+function getInitialPopupSize(workArea: { width: number; height: number }): {
   width: number;
   height: number;
 } {
@@ -84,7 +86,6 @@ function getInitialPopupSize(cursorPoint: { x: number; y: number }): {
   let width = popupSize?.width ?? DEFAULT_POPUP_WIDTH;
   let height = popupSize?.height ?? DEFAULT_POPUP_HEIGHT;
 
-  const workArea = screen.getDisplayNearestPoint(cursorPoint).workAreaSize;
   width = Math.max(MIN_POPUP_WIDTH, Math.min(width, workArea.width));
   height = Math.max(MIN_POPUP_HEIGHT, Math.min(height, workArea.height));
 
@@ -139,8 +140,18 @@ export function showTranslationPopup(translation: string | null, originalText: s
   // A new translation cycle starts: its language pair is not known yet.
   pendingLanguages = null;
 
-  // Get cursor position with DPI scaling consideration
+  // Place new popups beside the visible part of the selection when available.
   const cursorPoint = screen.getCursorScreenPoint();
+  const needsPosition = translation === null || !popupWindow || popupWindow.isDestroyed();
+  const selectionBounds = needsPosition ? getSelectionBounds() : null;
+  const displays = screen.getAllDisplays();
+  const selectionWorkAreaIndex = getSelectionWorkAreaIndex(
+    selectionBounds,
+    displays.map(display => display.workArea),
+  );
+  const selectionDisplay =
+    selectionWorkAreaIndex === null ? undefined : displays[selectionWorkAreaIndex];
+  const placementDisplay = selectionDisplay ?? screen.getDisplayNearestPoint(cursorPoint);
 
   // Capture the previously active app before showing the popup
   if (!popupWindow || popupWindow.isDestroyed()) {
@@ -164,13 +175,19 @@ export function showTranslationPopup(translation: string | null, originalText: s
 
     resetPopupTimer();
 
+    // A loading state starts a new translation. Follow the newly selected text
+    // once, while leaving the window in place for later content updates.
+    if (translation === null) {
+      repositionPopup(selectionBounds, cursorPoint);
+    }
+
     // Focus the window
     popupWindow.focus();
     return;
   }
 
   // Create popup window (using the persisted size when available)
-  const initialSize = getInitialPopupSize(cursorPoint);
+  const initialSize = getInitialPopupSize(placementDisplay.workArea);
   popupWindow = new BrowserWindow({
     width: initialSize.width,
     height: initialSize.height,
@@ -200,7 +217,7 @@ export function showTranslationPopup(translation: string | null, originalText: s
   popupWindow.on('resized', savePopupSize);
 
   // Position the window
-  repositionPopup(cursorPoint);
+  repositionPopup(selectionBounds, cursorPoint);
 
   // Load popup HTML
   const htmlPath = join(currentDir, '../../popup.html');
@@ -372,33 +389,21 @@ export function closePopup(restoreFocus = true): void {
   }
 }
 
-function repositionPopup(cursorPoint: { x: number; y: number }): void {
+function repositionPopup(
+  selectionBounds: SelectionBounds | null,
+  cursorPoint: { x: number; y: number },
+): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
 
   const [width = DEFAULT_POPUP_WIDTH, height = DEFAULT_POPUP_HEIGHT] = popupWindow.getSize();
-  const windowBounds = { width, height };
+  const cursorWorkArea = screen.getDisplayNearestPoint(cursorPoint).workArea;
+  const placement = getPopupPlacement({
+    selectionBounds,
+    cursorPoint,
+    cursorWorkArea,
+    workAreas: screen.getAllDisplays().map(display => display.workArea),
+    popupSize: { width, height },
+  });
 
-  // Get all displays to handle multi-monitor setups
-  const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
-  const displayBounds = currentDisplay.bounds;
-
-  // Calculate position (center window on cursor)
-  let x = cursorPoint.x - windowBounds.width / 2;
-  let y = cursorPoint.y - windowBounds.height / 2;
-
-  // Ensure popup doesn't go off-screen
-  if (x + windowBounds.width > displayBounds.x + displayBounds.width) {
-    x = displayBounds.x + displayBounds.width - windowBounds.width - 10;
-  }
-  if (y + windowBounds.height > displayBounds.y + displayBounds.height) {
-    y = displayBounds.y + displayBounds.height - windowBounds.height - 10;
-  }
-  if (x < displayBounds.x) {
-    x = displayBounds.x + 10;
-  }
-  if (y < displayBounds.y) {
-    y = displayBounds.y + 10;
-  }
-
-  popupWindow.setPosition(Math.round(x), Math.round(y));
+  popupWindow.setPosition(Math.round(placement.x), Math.round(placement.y));
 }

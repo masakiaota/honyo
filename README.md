@@ -260,7 +260,9 @@ npm start
 | Command | Description |
 |---------|-------------|
 | `npm start` | Run the app in development mode |
-| `npm test` | Run tests with Vitest |
+| `npm --silent test` | Run tests once with minimal output (recommended for coding agents) |
+| `npm run test:verbose` | Run tests once with detailed Vitest output |
+| `npm run test:watch` | Run tests in watch mode |
 | `npm run test:ui` | Run tests with Vitest UI |
 | `npm run typecheck` | Type check with TypeScript |
 | `npm run lint` | Lint with ESLint |

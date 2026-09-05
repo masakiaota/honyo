@@ -73,5 +73,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vitest-
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests quietly
+        run: npm --silent test
+
+      - name: Show failed test details
+        if: failure()
+        run: npm run test:verbose
