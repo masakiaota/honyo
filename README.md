@@ -1,330 +1,196 @@
-<div align="center">
-  <img src="assets/icon.svg" width="128" height="128" alt="Honyo Icon">
+# Honyo
 
-  # Honyo - AI-Powered Translation Tool
+English (canonical) | [日本語](README.ja.md)
 
-  A desktop application that provides instant AI-powered translation with a simple double Ctrl/Cmd+C shortcut, similar to DeepL.
+<img src="assets/icon.svg" width="96" height="96" alt="Honyo icon">
 
-  ![Honyo screenshot](assets/screenshot.png)
-</div>
+**Select text, hold Command (Ctrl on Windows/Linux), and press C twice quickly to translate.**
 
+Honyo is a desktop translation app with a **DeepL-style workflow**. It translates selected text with your chosen AI model and displays the result in a popup or notification.
 
-## Features
+This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc/honyo](https://github.com/eukarya-inc/honyo), with ChatGPT sign-in and model-specific reasoning and Fast mode settings.
 
-- ⚡ **Instant Translation** - Double Ctrl/Cmd+C to translate any selected text
-- 🌍 **Multi-Language Support** - 26 built-in languages plus custom language support
-- 🤖 **Auto-Updating AI Models** - Claude, GPT, Gemini, and custom models, with the model list kept up to date automatically
-- 🔁 **Back-Translation** - Instantly check quality by translating the result back to the source language
-- 🧭 **Language Direction Display** - See the detected source → target language at a glance
-- 💬 **Two Display Modes** - Notification with auto-copy or resizable popup window
-- 🎨 **Customizable** - Custom instructions (with AI assist), languages, and translation rules
-- 🪶 **Lightweight** - Minimal resource usage, lives in your system tray
+## Highlights
 
-## Installation
+- **Translate with your ChatGPT account.** Sign in to use models available to your account through Codex, without setting up an API key.
+- **Choose reasoning strength and Fast mode.** Combining lightweight models with lower reasoning can deliver faster responses.
+- **Choose your AI provider.** Use Claude, GPT, or Gemini with an API key. The API model list refreshes automatically from public catalogs.
+- **Translate in both directions.** Honyo chooses between your primary and secondary languages based on the source text. Back-translation helps you review the result.
+- **Set your translation style.** Add instructions for terminology and tone, or use AI to help write those instructions.
 
-### Download
+## Requirements and usage
 
-Download the latest version from [GitHub Releases](https://github.com/rot1024/honyo/releases).
+Translation requires an internet connection and one of these connections:
 
-#### Which file to download?
+| Connection      | What you need                                                        | Usage and billing                                                                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ChatGPT sign-in | A ChatGPT account with access to Codex                               | Translations use your Codex allowance. Available models and limits depend on your account. See [Codex pricing and limits](https://learn.chatgpt.com/docs/pricing).                                                  |
+| API key         | A key with access to the selected Anthropic, OpenAI, or Google model | The provider's API rates and limits apply. OpenAI API usage is billed separately from a ChatGPT subscription. See [OpenAI authentication and billing](https://learn.chatgpt.com/docs/auth#sign-in-with-an-api-key). |
 
-**Windows:**
-- `Honyo-{version}.exe` - Windows installer (recommended)
-- `Honyo-{version}-win.zip` - Portable version (no installation required)
+Translation sends the source text and any custom instructions to the selected AI service. Its data-handling policies apply.
 
-**macOS:**
-- **Apple Silicon (M1/M2/M3 Macs):**
-  - `Honyo-{version}-arm64.dmg` - DMG installer (recommended)
-  - `Honyo-{version}-arm64-mac.zip` - ZIP archive
-- **Intel Macs:**
-  - `Honyo-{version}.dmg` - DMG installer (recommended)
-  - `Honyo-{version}-mac.zip` - ZIP archive
+## Run from source
 
-**Linux:**
-- `Honyo-{version}.AppImage` - Universal Linux package (recommended)
-- `Honyo-{version}.deb` - Debian/Ubuntu package
-- `Honyo-{version}.rpm` - Red Hat/Fedora package
-- `Honyo-{version}.tar.gz` - Generic Linux archive
+This fork currently has no packaged releases. Build and run it from this repository.
 
-### macOS
+### Build prerequisites
 
-1. Download the appropriate version for your Mac from the downloads section above
+Install Git, **Node.js 23.6.0 or newer**, and npm. Native modules also need the tools below; see the [node-gyp installation guide](https://github.com/nodejs/node-gyp#installation) for setup details.
 
-2. **For DMG files**:
-   - Open the DMG file
-   - Drag Honyo.app to your Applications folder
+| Platform | Native build tools                                                                                                                |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | Python 3 and Xcode Command Line Tools (`xcode-select --install`). Your Node.js installation must include its development headers. |
+| Windows  | Python 3 and Visual Studio 2022 with the **Desktop development with C++** workload.                                               |
+| Linux    | Python 3, `make`, a C/C++ compiler, and X11 development libraries.                                                                |
 
-3. **For ZIP files**:
-   - Extract the zip file
-   - Move `Honyo.app` to your Applications folder
-
-4. **Remove quarantine attribute** (required for unsigned apps):
-   ```bash
-   xattr -cr /Applications/Honyo.app
-   ```
-
-5. **First launch**: Right-click (or Control-click) on Honyo.app and select "Open", then click "Open" in the security dialog
-
-6. Grant accessibility permissions:
-   - Open System Preferences > Security & Privacy > Privacy > Accessibility
-   - Add and enable Honyo.app
-
-### Windows
-
-Download and run `Honyo-*.exe`
-
-### Linux
-
-Download and run `Honyo-*.AppImage`
-
-## Configuration
-
-### API Keys
-
-To use the translation features, you need to configure API keys for your preferred AI provider:
-
-1. Click on the system tray icon
-2. Select "Settings..."
-3. In the "API Keys" tab, enter your API keys for the providers you want to use:
-   - **Anthropic**: Get your key from [console.anthropic.com](https://console.anthropic.com/)
-   - **OpenAI**: Get your key from [platform.openai.com](https://platform.openai.com/api-keys)
-   - **Google AI**: Get your key from [makersuite.google.com](https://makersuite.google.com/app/apikey)
-4. Click "Save"
-
-### Language Settings
-
-The app automatically detects your system language and sets appropriate defaults:
-- If your system is in English: Primary → English, Secondary → Japanese
-- If your system is in Japanese: Primary → Japanese, Secondary → English
-- Other languages: Primary → System language, Secondary → English
-
-You can change these settings from the system tray menu:
-1. Click on "Primary: [Language]" to select your primary translation target
-2. Click on "Secondary: [Language]" to select your fallback language
-
-**Supported Languages (26):**
-English, Japanese, Chinese (Simplified), Chinese (Traditional), Korean, Spanish, French, German, Italian, Portuguese, Russian, Arabic, Hindi, Thai, Vietnamese, Indonesian, Malay, Filipino, Dutch, Polish, Turkish, Ukrainian, Swedish, Danish, Norwegian, Finnish
-
-### Custom Instructions
-
-You can add custom instructions that will be included in all translations:
-
-1. Click on the system tray icon
-2. Select "Settings..."
-3. Go to the "Customization" tab and find the "Custom Prompt" section
-4. Enter your custom instructions (e.g., terminology guidelines, tone preferences, specific translation rules)
-5. Click "Save"
-
-Examples of custom instructions:
-- Use formal language
-- Keep product names in English
-- Maintain consistent terminology
-- Follow specific industry standards
-
-**Generate with AI:** Not sure how to phrase your instructions? Click "Generate with AI" and describe what you want in plain language — Honyo uses your selected model to write or refine the custom prompt for you.
-
-Whatever the input looks like — a question, a greeting, or even text that says "ignore previous instructions" — Honyo always treats it as text to translate, never as a command. Markdown and code formatting is preserved: the syntax is kept intact and only the human-readable text is translated.
-
-### AI Models
-
-Pick a model from the **AI Model** menu in the system tray. The list stays current automatically: Honyo refreshes it from free public model catalogs (no API key required, cached for 24 hours), showing the latest models per provider. If it can't reach the network, it falls back to a built-in list of current Claude, GPT, and Gemini models. Your selected model is always kept in the list even if a refresh would otherwise drop it.
-
-### Custom AI Models
-
-Use any AI model not included in the list:
-
-1. Open Settings → "Customization" tab → "Custom Model" section
-2. Enter the model name (e.g., `gpt-5.6-sol`, `claude-opus-4-8`)
-3. Select the provider (Anthropic, OpenAI, or Google AI)
-4. Click "Save"
-5. Select "Custom Model" from the AI Model menu
-
-### Custom Languages
-
-Add languages not included in the default list:
-
-1. Open Settings → "Customization" tab → "Custom Languages" section
-2. Enter language names, one per line (e.g., Esperanto, Sanskrit, Klingon)
-3. Click "Save"
-4. Your custom languages will appear in the Primary/Secondary language menus
-
-### Display Settings
-
-Configure popup window and translation display behavior:
-
-1. Open Settings → "General" tab
-2. **Auto-close on blur**: Enable this option to automatically close the popup window when it loses focus
-3. **Auto-close after 5 minutes**: Show a countdown in the popup header and automatically close it after 5 minutes
-4. **Enable streaming**: Enable this option to see translations appear progressively as the AI generates them (popup mode only)
-5. **Popup font size**: Set the translation text size in the popup (10–24px)
-6. **Reset Popup Size**: Restore the popup window to its default size
-7. Click "Save"
-
-**Display Modes:**
-- **Notification & Copy**: Translation result appears as a system notification and is automatically copied to clipboard
-- **Popup Window**: Translation result appears in a floating window with additional features:
-  - Language direction shown in the header (e.g. "English → Japanese")
-  - Real-time streaming (when enabled)
-  - Back-translate button (⇄) to check the result against the source language
-  - Copy button and keyboard shortcuts (Enter to copy, Escape to close)
-  - Right-click context menu for copying selected text or all text
-  - Resizable window — the size is remembered across closes
-  - Optional five-minute timeout with a header countdown bar — click it to reset to five minutes
-  - Auto-return focus to previous application when closed
-
-## Usage
-
-1. Select any text in any application
-2. Press Ctrl+C (Windows/Linux) or Cmd+C (macOS) twice quickly
-3. Depending on your display mode:
-   - **Notification mode**: Translation appears as notification and is copied to clipboard
-   - **Popup mode**: Translation appears in a floating window
-4. In popup mode:
-   - The header shows the detected language direction (e.g. "English → Japanese")
-   - Click the back-translate button (⇄) to translate the result back to the source language and check its quality — click again to toggle between the two views (the header shows the reverse direction while viewing the back-translation)
-   - Press Enter or click "Copy" to copy the translation and close
-   - Press Escape or click "×" to close without copying
-   - Right-click the text for copy options
-
-### Smart Translation
-
-The app intelligently determines the translation direction:
-- If the source text matches your primary language → translates to secondary language
-- If the source text is any other language → translates to primary language
-- For mixed-language text → detects the language with highest word count ratio
-
-### Menu Options
-
-Access these options by clicking the system tray icon:
-- **Primary/Secondary Language**: Set your translation language preferences (26+ built-in languages + custom)
-- **Display Mode**: Choose between notification and popup window
-- **AI Model**: Choose which AI model to use for translations (latest Claude, GPT, and Gemini models — auto-updated — or a custom model)
-- **Settings**: Configure API keys, custom instructions, models, languages, and display settings
-- **Pause Translation**: Temporarily disable the translation feature
-- **Stop Current Translation**: Cancel ongoing translation
-- **Check for Updates**: Check for new versions with progress display
-- **Quit**: Exit the application
-
-### Keyboard Shortcuts
-
-- **Ctrl/Cmd+C (twice)**: Trigger translation
-- **Enter** (in popup): Copy and close
-- **Escape** (in popup): Close without copying
-
-### Auto-Update
-
-Honyo automatically checks for updates on startup and every hour:
-- **Update available**: Choose to Download, remind Later, or Skip the version
-- **Downloading**: Progress displayed in menu (e.g., "Downloading Update (45%)...")
-- **Downloaded**: Option to restart and install or install later
-- **Skipped versions**: Won't be notified again until a new version is released
-- **Manual check**: Use "Check for Updates" from the menu
-
-### Environment Variables
-
-You can also set API keys via environment variables:
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
-- `GOOGLE_API_KEY`
-
-Create a `.env` file in the project root:
-```env
-ANTHROPIC_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here
-GOOGLE_API_KEY=your_key_here
-```
-
-## Development
-
-### Prerequisites
-
-- Node.js >= 23.6.0
-- npm
-
-### Setup
+<details>
+<summary>Debian/Ubuntu build dependencies</summary>
 
 ```bash
-git clone https://github.com/rot1024/honyo.git
+sudo apt-get update
+sudo apt-get install -y build-essential python3 \
+  libx11-dev libxtst-dev libxt-dev libx11-xcb-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev \
+  libxinerama-dev libxcursor-dev libxi-dev
+```
+
+</details>
+
+### Start Honyo
+
+```bash
+git clone https://github.com/masakiaota/honyo.git
 cd honyo
-npm install
-```
-
-### Running in Development
-
-```bash
+npm ci
 npm start
 ```
 
-### Scripts
+`npm start` builds the app before launching it. Honyo runs in the system tray or macOS menu bar; open its menu to access settings.
 
-| Command | Description |
-|---------|-------------|
-| `npm start` | Run the app in development mode |
-| `npm --silent test` | Run tests once with minimal output (recommended for coding agents) |
-| `npm run test:verbose` | Run tests once with detailed Vitest output |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:ui` | Run tests with Vitest UI |
-| `npm run typecheck` | Type check with TypeScript |
-| `npm run lint` | Lint with ESLint |
-| `npm run lint:fix` | Fix lint errors |
-| `npm run format` | Format with Prettier |
-| `npm run dist` | Build and package for current platform |
-| `npm run dist:mac` | Build and package for macOS |
-| `npm run dist:win` | Build and package for Windows |
-| `npm run dist:linux` | Build and package for Linux |
+On macOS, allow the app under **System Settings → Privacy & Security → Accessibility** so it can detect the shortcut. When running with `npm start`, the app is Electron. Enable the corresponding Electron entry and run `npm start` again after granting permission.
 
-### macOS accessibility after a local rebuild
+## Your first translation
 
-An unsigned or ad-hoc-signed rebuild changes the app's code signature. If macOS keeps requesting
-accessibility permission even though Honyo is enabled, reset only Honyo's stale permission:
+### Connect with ChatGPT
+
+1. Open the tray menu → **Settings... → API Keys**.
+2. In **ChatGPT/Codex**, select **Sign in with ChatGPT** and complete the browser sign-in.
+3. Return to Honyo, open the tray's **AI Model** menu, and select a model whose name ends in **(ChatGPT)**.
+
+The **(ChatGPT)** suffix identifies models that use your Codex access. Other provider entries use API keys.
+
+### Connect with an API key
+
+1. Obtain a key from [Anthropic Console](https://console.anthropic.com/), [OpenAI Platform](https://platform.openai.com/api-keys), or [Google AI Studio](https://aistudio.google.com/apikey).
+2. Open **Settings... → API Keys**, enter the key in the matching provider field, and select **Save**.
+3. Choose a model from that provider in the tray's **AI Model** menu.
+
+### Translate
+
+1. Set **Primary** to the language you usually want to read and **Secondary** to the other language you use.
+2. Choose a **Display Mode** from the tray menu. Select **Popup Window** to read and review translations, or **Notification & Copy** to copy results automatically.
+3. Select text and press **Cmd+C twice** on macOS or **Ctrl+C twice** on Windows and Linux, in quick succession.
+
+Text in your primary language is translated into your secondary language. Text in another language is translated into your primary language. For example, with Japanese as primary and English as secondary, English text becomes Japanese and Japanese text becomes English.
+
+| Display mode        | What happens                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Popup Window        | Shows the translation and language direction. Use **⇄** to back-translate for review. Press **Enter** or select **Copy** to copy and close; press **Escape** to close. |
+| Notification & Copy | Shows a system notification and replaces the clipboard contents with the translation. This is the default mode.                                                        |
+
+Use **Pause Translation** in the tray menu to temporarily disable the shortcut, or **Stop Current Translation** to cancel a request.
+
+## Model and translation settings
+
+### Reasoning effort and Fast mode
+
+Select a model in the tray menu, then open **Settings... → Model**:
+
+- **Reasoning effort** sets how much reasoning the model should use. Leave **Use the model default** selected to use its default behavior.
+- **Use Fast mode** requests faster processing when the selected model supports it.
+
+Select **Save** to save these preferences for the selected model. Availability depends on the model; ChatGPT model options come from your account's model catalog.
+
+Fast mode consumes more of your Codex allowance when using ChatGPT. For supported OpenAI API models, it uses Priority processing with separate API rates. See [OpenAI's Fast mode and billing guidance](https://learn.chatgpt.com/docs/agent-configuration/speed).
+
+### Translation instructions
+
+Open **Settings... → Customization → Custom Prompt** to add instructions included in every translation, then select **Save**. For example:
+
+```text
+Keep product names in their original language.
+Use consistent terminology for software development.
+Use a formal tone.
+```
+
+**Generate with AI** can write or refine the instructions using your selected model.
+
+The same **Customization** tab lets you add:
+
+- **Custom Model:** enter an exact model ID and its API provider, save, then choose **Custom Model** in the tray's **AI Model** menu.
+- **Custom Languages:** enter one language name per line and save. They become available in the **Primary** and **Secondary** menus.
+
+## Troubleshooting
+
+| Symptom                                               | What to check                                                                                                                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The shortcut does nothing                             | Confirm Honyo is running, **Pause Translation** is off, and the text was copied. On macOS, grant Accessibility permission to the app you are running. |
+| An API key is requested after signing in with ChatGPT | Select a model ending in **(ChatGPT)** in **AI Model**.                                                                                               |
+| Translation fails                                     | Check your connection, model access, and the usage limit or billing status of the account used for that model.                                        |
+| The popup does not appear                             | Select **Display Mode → Popup Window**. The default is **Notification & Copy**.                                                                       |
+| A native module fails to build                        | Check the platform prerequisites above. On macOS, verify that Xcode Command Line Tools and Node.js development headers are installed.                 |
+
+If a locally packaged macOS app keeps requesting Accessibility permission after a rebuild, reset its stored permission:
 
 ```bash
 tccutil reset Accessibility com.rot1024.honyo
 ```
 
-Then launch `/Applications/Honyo.app` and enable it again under **System Settings → Privacy &
-Security → Accessibility**. Do not run this for every build; it is only needed when macOS retains
-permission for an older signature.
+Then launch the rebuilt Honyo app and enable it again in Accessibility settings. The bundle ID above is the one currently used by this fork.
 
-### Project Structure
+## Local data
 
-```
-src/
-├── main.ts              # Entry point
-├── models.ts            # AI model definitions
-├── app/                 # App lifecycle, updater, accessibility
-├── config/              # Configuration management
-├── keyboard/            # Keyboard event handling (uiohook-napi)
-├── language/            # Language detection and constants
-├── translation/         # AI translation (Vercel AI SDK)
-└── ui/                  # Tray, menu, popup, settings windows
-```
+Settings and API keys are stored in the app's local data directory. API keys are saved in `apikeys.json` as unencrypted JSON. Codex uses the `codex` subdirectory for its local data.
 
-### Tech Stack
+Console output can include excerpts of copied text. Remove private text and credentials before sharing logs in an issue.
 
-- **Electron** - Desktop app framework
-- **TypeScript** - Language
-- **Vercel AI SDK** - AI provider integration (Anthropic, OpenAI, Google)
-- **uiohook-napi** - Global keyboard hooks
-- **electron-builder** - Packaging
-- **Vitest** - Testing
-- **ESLint + Prettier** - Linting and formatting
+## Update from source
 
-### Release
+Quit Honyo, then run these commands in your checkout:
 
 ```bash
-npm run release          # Auto version bump based on commits
-npm run release:patch    # Patch release (0.0.x)
-npm run release:minor    # Minor release (0.x.0)
-npm run release:major    # Major release (x.0.0)
+git pull --ff-only
+npm ci
+npm start
 ```
 
-This updates version, generates CHANGELOG.md, and creates a git tag. Push the tag to trigger the GitHub Actions release workflow.
+The in-app updater currently points to the original project's releases. Use the source update procedure above for this fork.
 
-## License
+## Development and contributions
 
-MIT
+| Command                | Purpose                        |
+| ---------------------- | ------------------------------ |
+| `npm start`            | Build and run the app          |
+| `npm run typecheck`    | Check TypeScript types         |
+| `npm run lint`         | Run ESLint                     |
+| `npm run format:check` | Check formatting               |
+| `npm --silent test`    | Run tests with compact output  |
+| `npm run test:verbose` | Run tests with detailed output |
+| `npm run test:watch`   | Run tests while editing        |
+| `npm run dist:mac`     | Build a local macOS package    |
+| `npm run dist:win`     | Build a local Windows package  |
+| `npm run dist:linux`   | Build a local Linux package    |
 
-## Contributing
+Packaging outputs go to `dist/`. Build on the target OS with its native build tools. Publishing settings and release automation still contain upstream destinations and need to be configured for this fork before publishing.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+For development, API keys can also be set through `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GOOGLE_API_KEY`, including in a `.env` file at the project root. Keys saved in Settings take precedence.
+
+Report bugs in [this repository's issues](https://github.com/masakiaota/honyo/issues), including the OS, revision, and reproduction steps. Contributions are welcome through [pull requests](https://github.com/masakiaota/honyo/pulls).
+
+This English README is the canonical version. Update it first and keep [README.ja.md](README.ja.md) in sync in the same change.
+
+## Acknowledgments and license
+
+This project is based on [Honyo](https://github.com/eukarya-inc/honyo), originally created by rot1024. Thanks to the original author and contributors for building and sharing Honyo.
+
+Distributed under the [MIT License](LICENSE), with the original copyright notice retained.
