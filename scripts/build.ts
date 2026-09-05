@@ -11,7 +11,8 @@ import esbuild from 'esbuild';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { readdirSync, statSync, rmSync } from 'fs';
+import { readdirSync, statSync, rmSync, mkdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -65,10 +66,43 @@ try {
   // Fix imports with .ts extensions
   console.log('Fixing import extensions...');
   await fixImports(buildDir);
+  buildMacOSSelectionAnchor();
   console.log('Import extensions fixed!');
 } catch (error) {
   console.error('Build failed:', error);
   process.exit(1);
+}
+
+function buildMacOSSelectionAnchor(): void {
+  if (process.platform !== 'darwin') return;
+
+  const nodePrefix = process.config.variables.node_prefix;
+  if (typeof nodePrefix !== 'string') {
+    throw new Error('Node.js headers are unavailable');
+  }
+
+  const source = join(rootDir, 'native', 'macos-selection-anchor.mm');
+  const outputDir = join(buildDir, 'native');
+  const output = join(outputDir, 'macos-selection-anchor.node');
+  mkdirSync(outputDir, { recursive: true });
+  execFileSync(
+    'xcrun',
+    [
+      'clang++',
+      '-std=c++17',
+      '-bundle',
+      '-undefined',
+      'dynamic_lookup',
+      '-I',
+      join(nodePrefix, 'include', 'node'),
+      source,
+      '-framework',
+      'ApplicationServices',
+      '-o',
+      output,
+    ],
+    { stdio: 'inherit' },
+  );
 }
 
 // Function to fix .ts extensions in imports
