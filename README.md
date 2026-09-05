@@ -13,7 +13,7 @@ This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc
 ## Highlights
 
 - **Translate with your ChatGPT account.** Sign in to use models available to your account through Codex, without setting up an API key.
-- **Choose reasoning strength and Fast mode.** Combining lightweight models with lower reasoning can deliver faster responses.
+- **Choose reasoning effort and Fast mode.** Combining lightweight models with lower reasoning can deliver faster responses.
 - **Choose your AI provider.** Use Claude, GPT, or Gemini with an API key. The API model list refreshes automatically from public catalogs.
 - **Translate in both directions.** Honyo chooses between your primary and secondary languages based on the source text. Back-translation helps you review the result.
 - **Set your translation style.** Add instructions for terminology and tone, or use AI to help write those instructions.
