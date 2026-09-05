@@ -10,6 +10,8 @@ Honyo は、**DeepL のような操作感**で使えるデスクトップ翻訳�
 
 このリポジトリは、[eukarya-inc/honyo](https://github.com/eukarya-inc/honyo) に ChatGPT ログインとモデルごとの推論設定、Fast mode を追加した [masakiaota による派生版](https://github.com/masakiaota/honyo)だ。
 
+![Honyo のポップアップウィンドウとトレイメニュー](assets/screenshot.png)
+
 ## 主な特長
 
 - **ChatGPT アカウントで翻訳する**：ログインすると、アカウントの Codex で利用できるモデルを使える。API キーの準備は不要だ。

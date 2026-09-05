@@ -10,6 +10,8 @@ Honyo is a desktop translation app with a **DeepL-style workflow**. It translate
 
 This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc/honyo](https://github.com/eukarya-inc/honyo), with ChatGPT sign-in and model-specific reasoning and Fast mode settings.
 
+![Honyo popup window and tray menu](assets/screenshot.png)
+
 ## Highlights
 
 - **Translate with your ChatGPT account.** Sign in to use models available to your account through Codex, without setting up an API key.
