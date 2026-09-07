@@ -1,6 +1,7 @@
-import { app, Notification } from 'electron';
+import { app } from 'electron';
 import { stopKeyboardListener } from '../keyboard/index.ts';
-import { destroyTray, getTray } from '../ui/tray.ts';
+import { destroyTray } from '../ui/tray.ts';
+import { openSetupWindow } from './accessibility.ts';
 import { shutdownCodex } from '../codex/index.ts';
 
 // Prevent multiple instances
@@ -15,13 +16,11 @@ export function setupSingleInstance(): boolean {
   // Handle second instance attempt
   app.on('second-instance', () => {
     console.log('Another instance tried to run');
-    // Focus existing instance
-    if (getTray()) {
-      new Notification({
-        title: 'Honyo Translator',
-        body: 'Already running in the system tray',
-      }).show();
-    }
+    void app.whenReady().then(openSetupWindow);
+  });
+
+  app.on('activate', () => {
+    void app.whenReady().then(openSetupWindow);
   });
 
   return true;
