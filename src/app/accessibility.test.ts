@@ -83,3 +83,11 @@ async function invoke(event: unknown, action: string): Promise<unknown> {
   if (!mock.handler) throw new Error('Setup handler was not registered');
   return mock.handler(event, action);
 }
+
+it('rejects unknown actions from the setup window', async () => {
+  const { openSetupWindow } = await import('./accessibility.ts');
+  openSetupWindow();
+  await expect(invoke({ sender: mock.windows[0]?.webContents }, 'unknown')).rejects.toThrow(
+    'Unknown setup action',
+  );
+});

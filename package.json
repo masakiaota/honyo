@@ -95,7 +95,8 @@
       "build/**/*",
       "node_modules/**/*",
       "package.json",
-      "*.html"
+      "*.html",
+      "assets/setup/**/*"
     ],
     "extraMetadata": {
       "main": "build/main.js"

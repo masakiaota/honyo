@@ -52,6 +52,8 @@ export function openSetupWindow(): void {
           complete = undefined;
           window?.close();
           return true;
+        default:
+          throw new Error('Unknown setup action');
       }
     });
     installed = true;

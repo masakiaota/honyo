@@ -16,10 +16,12 @@ export function setupSingleInstance(): boolean {
   // Handle second instance attempt
   app.on('second-instance', () => {
     console.log('Another instance tried to run');
-    openSetupWindow();
+    void app.whenReady().then(openSetupWindow);
   });
 
-  app.on('activate', () => openSetupWindow());
+  app.on('activate', () => {
+    void app.whenReady().then(openSetupWindow);
+  });
 
   return true;
 }
