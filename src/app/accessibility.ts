@@ -1,89 +1,88 @@
-import { app, dialog, shell, systemPreferences } from 'electron';
-import { execSync } from 'child_process';
+import { app, BrowserWindow, ipcMain, shell, systemPreferences } from 'electron';
+import { join } from 'node:path';
+import { openSettingsWindow } from '../ui/settings.ts';
 
-function getActualBundleId(): string {
-  if (!app.isPackaged) {
-    return 'com.electron.electron';
+let window: BrowserWindow | null = null;
+let complete: (() => void) | undefined;
+let installed = false;
+
+export function hasAccessibilityPermission(): boolean {
+  return process.platform !== 'darwin' || systemPreferences.isTrustedAccessibilityClient(false);
+}
+
+export function openSetupWindow(): void {
+  if (window) {
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+    return;
   }
-
-  try {
-    // Get the app bundle path and construct Info.plist path
-    const appPath = app.getPath('exe');
-    // Remove the executable name and MacOS directory to get Contents path
-    const contentsPath = appPath.substring(0, appPath.lastIndexOf('/MacOS'));
-    const plistPath = `${contentsPath}/Info.plist`;
-
-    console.log('Reading bundle ID from:', plistPath);
-    return execSync(`defaults read "${plistPath}" CFBundleIdentifier`).toString().trim();
-  } catch (error) {
-    console.error('Failed to read bundle ID from Info.plist:', error);
-    return 'com.rot1024.honyo'; // Fallback to expected bundle ID
+  if (!installed) {
+    ipcMain.handle('setup-action', async (event, action: string) => {
+      if (event.sender !== window?.webContents) return;
+      switch (action) {
+        case 'status':
+          return {
+            granted: hasAccessibilityPermission(),
+            appName: app.isPackaged ? 'Honyo' : 'Electron',
+          };
+        case 'permission':
+          if (process.platform === 'darwin') {
+            systemPreferences.isTrustedAccessibilityClient(true);
+            await shell.openExternal(
+              'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+            );
+          }
+          return;
+        case 'reveal':
+          shell.showItemInFolder(
+            app.isPackaged ? join(app.getPath('exe'), '../../..') : app.getPath('exe'),
+          );
+          return;
+        case 'settings':
+          openSettingsWindow();
+          return;
+        case 'restart':
+          app.relaunch();
+          app.quit();
+          return;
+        case 'finish':
+          if (!hasAccessibilityPermission()) return false;
+          complete?.();
+          complete = undefined;
+          window?.close();
+          return true;
+      }
+    });
+    installed = true;
   }
+  window = new BrowserWindow({
+    width: 620,
+    height: 760,
+    minWidth: 480,
+    minHeight: 560,
+    title: 'Honyoの準備',
+    backgroundColor: '#f5f6f8',
+    webPreferences: {
+      preload: join(app.getAppPath(), 'build/ui/setup-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', event => event.preventDefault());
+  void window.loadFile(join(app.getAppPath(), 'setup.html'));
+  window.on('closed', () => {
+    window = null;
+  });
 }
 
 export async function checkAccessibilityPermission(): Promise<boolean> {
-  // Only check on macOS
-  if (process.platform !== 'darwin') {
-    return true;
-  }
-
-  console.log('Checking accessibility permissions...');
-  console.log('App path:', app.getPath('exe'));
-  console.log('App name:', app.getName());
-  console.log('Process path:', process.execPath);
-  console.log('Is packaged:', app.isPackaged);
-
-  const actualBundleId = getActualBundleId();
-  console.log('Actual Bundle ID:', actualBundleId);
-
-  // Try different approaches for checking accessibility
-  let isTrusted = false;
-
-  // First try without prompting
-  isTrusted = systemPreferences.isTrustedAccessibilityClient(false);
-  console.log('Is trusted (no prompt):', isTrusted);
-
-  if (!isTrusted && app.isPackaged) {
-    // For packaged apps, try with prompt
-    isTrusted = systemPreferences.isTrustedAccessibilityClient(true);
-    console.log('Is trusted (with prompt):', isTrusted);
-  }
-
-  if (!isTrusted) {
-    console.log('Showing accessibility dialog...');
-
-    const result = await dialog.showMessageBox({
-      type: 'warning',
-      title: 'Accessibility Permission Required',
-      message: 'Honyo needs accessibility permission to detect keyboard shortcuts.',
-      detail:
-        'Please grant accessibility permission in System Preferences > Security & Privacy > Privacy > Accessibility.\n\n' +
-        'The app will now open System Preferences and quit. Please restart Honyo after granting permission.',
-      buttons: ['Open System Preferences', 'Quit'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-
-    console.log('Dialog result:', result);
-
-    if (result.response === 0) {
-      console.log('Opening System Preferences...');
-      // Open System Preferences to the Privacy > Accessibility pane
-      const opened = await shell.openExternal(
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-      );
-      console.log('System Preferences opened:', opened);
-      // Wait a bit for System Preferences to open
-      console.log('Waiting 2 seconds...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('Wait complete');
-    }
-
-    // Quit the app
-    console.log('Quitting app...');
-    app.quit();
-    return false;
-  }
-
+  if (hasAccessibilityPermission()) return true;
+  await new Promise<void>(resolve => {
+    complete = resolve;
+    openSetupWindow();
+  });
   return true;
 }

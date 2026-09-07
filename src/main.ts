@@ -32,12 +32,6 @@ function initialize(): void {
     console.log('App ready, starting key listener...');
     console.log('API Key present:', !!process.env.ANTHROPIC_API_KEY);
 
-    // Check accessibility permission on macOS
-    const hasPermission = await checkAccessibilityPermission();
-    if (!hasPermission) {
-      return; // App will quit
-    }
-
     // Initialize configuration
     initializeConfig();
 
@@ -65,6 +59,9 @@ function initialize(): void {
 
     // Setup IPC for popup window
     setupPopupIPC();
+
+    // Keep the tray and settings available while permission is being granted.
+    await checkAccessibilityPermission();
 
     // Setup keyboard handler
     setupKeyboardHandler();

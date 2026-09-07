@@ -8,6 +8,7 @@ import { languages } from '../language/index.ts';
 import { CUSTOM_MODEL_ID, type AIModelInfo } from '../models.ts';
 import { getAvailableModels, getModelInfo } from '../models-remote.ts';
 import { getConfig, updateConfig, getPausedState, setPausedState } from '../config/index.ts';
+import { openSetupWindow } from '../app/accessibility.ts';
 import { openSettingsWindow } from './settings.ts';
 import {
   checkForUpdates,
@@ -228,6 +229,10 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
 
         return menuItems;
       })(),
+    },
+    {
+      label: '初期設定・権限の確認…',
+      click: (): void => openSetupWindow(),
     },
     {
       label: 'Settings...',
