@@ -14,6 +14,8 @@ This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc
 
 ## Highlights
 
+- **Translate offline on Apple Silicon Macs.** Download a 1.13 GB translation model once; no account or API key is needed. Results stream as they are generated.
+
 - **Translate with your ChatGPT account.** Sign in to use models available to your account through Codex, without setting up an API key.
 - **Choose reasoning effort and Fast mode.** Combining lightweight models with lower reasoning can deliver faster responses.
 - **Choose your AI provider.** Use Claude, GPT, or Gemini with an API key. The API model list refreshes automatically from public catalogs.
@@ -22,14 +24,14 @@ This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc
 
 ## Requirements and usage
 
-Translation requires an internet connection and one of these connections:
+Offline English ↔ Japanese translation requires an Apple Silicon Mac and a one-time model download. Cloud translation requires an internet connection and one of these connections:
 
 | Connection      | What you need                                                        | Usage and billing                                                                                                                                                                                                   |
 | --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ChatGPT sign-in | A ChatGPT account with access to Codex                               | Translations use your Codex allowance. Available models and limits depend on your account. See [Codex pricing and limits](https://learn.chatgpt.com/docs/pricing).                                                  |
 | API key         | A key with access to the selected Anthropic, OpenAI, or Google model | The provider's API rates and limits apply. OpenAI API usage is billed separately from a ChatGPT subscription. See [OpenAI authentication and billing](https://learn.chatgpt.com/docs/auth#sign-in-with-an-api-key). |
 
-Translation sends the source text and any custom instructions to the selected AI service. Its data-handling policies apply.
+Cloud translation sends the source text and any custom instructions to the selected AI service. Its data-handling policies apply. Offline translation keeps the source text on your Mac.
 
 ## Run from source
 
@@ -72,6 +74,18 @@ npm start
 On macOS, allow the app under **System Settings → Privacy & Security → Accessibility** so it can detect the shortcut. When running with `npm start`, the app is Electron. Enable the corresponding Electron entry and run `npm start` again after granting permission.
 
 ## Your first translation
+
+### Translate offline (no account)
+
+1. Open **Settings → Offline Translation** and select **Download (1.13 GB)**.
+2. Once the download is verified, select **Use this model**. This selects English ↔ Japanese and popup display immediately.
+3. Try the sample text in Settings, or select text anywhere and double-copy as usual.
+
+Honyo uses **Hy-MT2 1.8B Q4_K_M** with llama.cpp and Metal. Model weights stay in memory while selected and preload when Honyo starts. Switching to a cloud model or deleting the offline model releases them. Each request has its own context, a 2,000-character input limit and a 90-second generation deadline. CPU evaluation uses at most two threads; only one local translation runs at once.
+
+Models are saved under `~/Library/Application Support/Honyo/models`, outside Git and the application bundle. Downloads use a pinned revision and SHA-256 verification. You can cancel or retry downloads and delete the model in Settings. Interrupted downloads restart from the beginning. No Python installation, model conversion or external inference server is needed.
+
+Offline translations stream into the popup when streaming is enabled in General settings. Custom translation prompts and AI prompt generation are not supported by this translation-only integration. Technical terminology and ambiguous text can still be mistranslated; validation detects empty output, loops, truncation, damaged code/URLs, and some wrong-language output, but cannot prove semantic accuracy. See the [model comparison and actual outputs](docs/local-translation.md).
 
 ### Connect with ChatGPT
 

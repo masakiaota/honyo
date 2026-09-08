@@ -1,3 +1,16 @@
+import { LOCAL_MODEL_ID } from '../local/model.ts';
+import {
+  localState,
+  releaseLocal,
+  warmLocal,
+  subscribeLocal,
+  installLocal,
+  cancelLocalDownload,
+  deleteLocal,
+  translateLocal,
+} from '../local/index.ts';
+import { getTray } from './tray.ts';
+import { createTrayMenu } from './menu.ts';
 import { BrowserWindow, ipcMain, app, shell, type IpcMainEvent } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -50,6 +63,7 @@ const getCurrentDir = (): string => {
 const currentDir = getCurrentDir();
 
 const allowedExternalHosts = new Set([
+  'huggingface.co',
   'console.anthropic.com',
   'platform.openai.com',
   'makersuite.google.com',
@@ -77,9 +91,10 @@ function isSettingsEvent(event: IpcMainEvent): boolean {
   return event.sender === settingsWindow?.webContents;
 }
 
-export function openSettingsWindow(): void {
+export function openSettingsWindow(tab?: string): void {
   if (settingsWindow) {
     settingsWindow.focus();
+    if (tab) settingsWindow.webContents.send('settings-tab', tab);
     return;
   }
 
@@ -99,7 +114,7 @@ export function openSettingsWindow(): void {
   });
 
   const htmlPath = join(currentDir, '../../settings.html');
-  void settingsWindow.loadFile(htmlPath);
+  void settingsWindow.loadFile(htmlPath, tab ? { hash: tab } : {});
 
   settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedExternalUrl(url)) {
@@ -125,6 +140,70 @@ export function openSettingsWindow(): void {
 }
 
 export function setupSettingsIPC(): void {
+  const sendLocal = (): void => {
+    settingsWindow?.webContents.send('local-model-state', {
+      ...localState(),
+      selected: getConfig().aiModel === LOCAL_MODEL_ID,
+    });
+  };
+  subscribeLocal(sendLocal);
+  ipcMain.on('load-local-model', event => {
+    if (isSettingsEvent(event)) sendLocal();
+  });
+  const localAction = (channel: string, action: () => Promise<void>): void => {
+    ipcMain.on(channel, event => {
+      if (!isSettingsEvent(event)) return;
+      settingsWindow?.webContents.send('local-model-error', '');
+      void action()
+        .catch(cause => {
+          settingsWindow?.webContents.send(
+            'local-model-error',
+            cause instanceof Error ? cause.message : String(cause),
+          );
+        })
+        .finally(sendLocal);
+    });
+  };
+  localAction('install-local-model', installLocal);
+  localAction('delete-local-model', deleteLocal);
+  ipcMain.on('cancel-local-download', event => {
+    if (isSettingsEvent(event)) cancelLocalDownload();
+  });
+  localAction('select-local-model', async () => {
+    if (!localState().supported || !localState().installed || localState().busy)
+      throw new Error('Wait for model setup to finish before selecting it.');
+    await warmLocal();
+    if (localState().error) throw new Error(localState().error);
+    updateConfig({
+      aiModel: LOCAL_MODEL_ID,
+      targetLanguage: 'Japanese',
+      secondaryLanguage: 'English',
+      displayMode: 'popup',
+    });
+    const tray = getTray();
+    tray?.setContextMenu(createTrayMenu(tray, () => undefined));
+  });
+  ipcMain.on('test-local-model', (event, text: unknown) => {
+    if (!isSettingsEvent(event) || typeof text !== 'string') return;
+    const started = Date.now();
+    void translateLocal(text, 'Japanese', 'English', undefined, chunk => {
+      if (!event.sender.isDestroyed()) event.reply('local-test-chunk', chunk);
+    })
+      .then(result => {
+        if (!event.sender.isDestroyed())
+          event.reply('local-test-result', { ...result, seconds: (Date.now() - started) / 1000 });
+      })
+      .catch(cause => {
+        if (!event.sender.isDestroyed())
+          event.reply('local-test-result', {
+            error: cause instanceof Error ? cause.message : String(cause),
+          });
+      })
+      .finally(() => {
+        if (getConfig().aiModel !== LOCAL_MODEL_ID) releaseLocal();
+      });
+  });
+
   if (!codexSubscriptionInstalled) {
     subscribeCodexConnection(state => {
       if (
@@ -367,6 +446,8 @@ export function setupSettingsIPC(): void {
       void (async (): Promise<void> => {
         try {
           const config = getConfig();
+          if (config.aiModel === LOCAL_MODEL_ID)
+            throw new Error('The offline model only supports translation, not prompt generation.');
           const apiKeys = getApiKeys();
           const modelInfo =
             config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
@@ -409,7 +490,7 @@ Rules:
             }
             apiKey = apiKeys[config.customModel.provider];
           } else {
-            if (modelInfo && modelInfo.provider !== 'codex') {
+            if (modelInfo && modelInfo.provider !== 'codex' && modelInfo.provider !== 'local') {
               apiKey = apiKeys[modelInfo.provider];
             }
           }

@@ -1,3 +1,5 @@
+import { LOCAL_MODEL_ID } from '../local/model.ts';
+import { releaseLocal } from '../local/index.ts';
 import { app } from 'electron';
 import { config as loadEnv } from 'dotenv';
 import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
@@ -127,6 +129,8 @@ export function getConfig(): Config {
 }
 
 export function updateConfig(updates: Partial<Config>): void {
+  if (config.aiModel === LOCAL_MODEL_ID && updates.aiModel && updates.aiModel !== LOCAL_MODEL_ID)
+    releaseLocal();
   config = { ...config, ...updates };
   saveConfig();
 }

@@ -8,3 +8,10 @@ build/
 .eslintcache
 RELEASE_NOTES.md
 dev-app-update.yml
+
+# Downloaded local translation weights
+*.gguf
+*.gguf.partial
+
+.playwright-cli/
+output/playwright/

@@ -1,3 +1,4 @@
+import { shutdownLocal } from '../local/index.ts';
 import { app } from 'electron';
 import { stopKeyboardListener } from '../keyboard/index.ts';
 import { destroyTray } from '../ui/tray.ts';
@@ -37,6 +38,7 @@ export function setupPlatformSpecific(): void {
 export function cleanupAndExit(): void {
   stopKeyboardListener();
   shutdownCodex();
+  shutdownLocal();
   destroyTray();
 
   // Wait a bit then force exit
@@ -58,6 +60,7 @@ export function setupShutdownHandlers(): void {
     console.log('App is about to quit, cleaning up...');
     stopKeyboardListener();
     shutdownCodex();
+    shutdownLocal();
   });
 
   // Process termination handling

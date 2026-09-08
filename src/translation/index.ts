@@ -1,3 +1,5 @@
+import { LOCAL_MODEL_ID, localDirection } from '../local/model.ts';
+import { translateLocal } from '../local/index.ts';
 import { Notification } from 'electron';
 import { generateText, streamText } from 'ai';
 import type { LanguageModel } from 'ai';
@@ -77,7 +79,7 @@ function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; err
       return { valid: false, error: `Unknown model: ${config.aiModel}` };
     }
 
-    if (modelInfo.provider === 'codex') {
+    if (modelInfo.provider === 'codex' || modelInfo.provider === 'local') {
       return { valid: false, error: 'ChatGPT/Codex account is not connected' };
     }
 
@@ -180,6 +182,9 @@ export async function translateTextDetailed(
   const config = getConfig();
   const apiKeys = getApiKeys();
 
+  if (config.aiModel === LOCAL_MODEL_ID)
+    return translateLocal(text, primaryLanguage, secondaryLanguage, signal);
+
   if (isCodexModel(config)) {
     return translateWithCodex(text, primaryLanguage, secondaryLanguage, config, signal);
   }
@@ -256,6 +261,7 @@ export async function translateTextSafe(
   try {
     return await translateTextDetailed(text, primaryLanguage, secondaryLanguage, signal);
   } catch (error) {
+    if (getConfig().aiModel === LOCAL_MODEL_ID) throw error;
     return { translation: handleTranslationError(error, getConfig()) };
   }
 }
@@ -281,6 +287,19 @@ export async function translateTextStreaming(
   const apiKeys = getApiKeys();
 
   try {
+    if (config.aiModel === LOCAL_MODEL_ID) {
+      const direction = localDirection(text, primaryLanguage, secondaryLanguage);
+      onLanguages?.(direction.sourceLanguage, direction.targetLanguage);
+      const result = await translateLocal(
+        text,
+        primaryLanguage,
+        secondaryLanguage,
+        signal,
+        onChunk,
+      );
+      onChunk(result.translation);
+      return result.translation;
+    }
     if (isCodexModel(config)) {
       const model = getCodexModelId(config.aiModel);
       if (!model) {
@@ -394,6 +413,7 @@ export async function translateTextStreaming(
     console.log('Translation complete (streaming):', finalParsed.translation.slice(0, 50) + '...');
     return finalParsed.translation.trim();
   } catch (error) {
+    if (config.aiModel === LOCAL_MODEL_ID) throw error;
     return handleTranslationError(error, config);
   }
 }

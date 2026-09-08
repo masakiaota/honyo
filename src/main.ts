@@ -1,3 +1,8 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { openSettingsWindow } from './ui/settings.ts';
+import { LOCAL_MODEL_ID } from './local/model.ts';
+import { warmLocal } from './local/index.ts';
 import { app } from 'electron';
 import { initializeConfig, getConfig } from './config/index.ts';
 import { loadModelsCache, refreshModels, setSelectedModelProvider } from './models-remote.ts';
@@ -33,7 +38,9 @@ function initialize(): void {
     console.log('API Key present:', !!process.env.ANTHROPIC_API_KEY);
 
     // Initialize configuration
+    const firstLaunch = !existsSync(join(app.getPath('userData'), 'config.json'));
     initializeConfig();
+    if (getConfig().aiModel === LOCAL_MODEL_ID) void warmLocal();
 
     // Pin the currently-selected model so the model-list cap never drops it
     setSelectedModelProvider(() => getConfig().aiModel);
@@ -56,6 +63,7 @@ function initialize(): void {
 
     // Setup IPC for settings window
     setupSettingsIPC();
+    if (firstLaunch) openSettingsWindow('offline');
 
     // Setup IPC for popup window
     setupPopupIPC();

@@ -149,9 +149,13 @@ export function setupKeyboardHandler(): void {
                 closePopup();
               }
             } else {
+              if (getConfig().displayMode === 'popup')
+                finalizePopupTranslation(
+                  error instanceof Error ? error.message : 'Translation failed',
+                );
               new Notification({
                 title: 'Translation Error',
-                body: 'Failed to translate. Check console for details.',
+                body: error instanceof Error ? error.message : 'Failed to translate.',
               }).show();
             }
           } finally {

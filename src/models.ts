@@ -1,4 +1,4 @@
-export type AIProvider = 'anthropic' | 'openai' | 'google' | 'codex';
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'codex' | 'local';
 
 export interface ReasoningEffortOption {
   reasoningEffort: string;
