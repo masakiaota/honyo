@@ -197,7 +197,7 @@ The in-app updater currently points to the original project's releases. Use the 
 | `npm run dist:win`     | Build a local Windows package  |
 | `npm run dist:linux`   | Build a local Linux package    |
 
-Packaging outputs go to `dist/`. Build on the target OS with its native build tools. Publishing settings and release automation still contain upstream destinations and need to be configured for this fork before publishing.
+Packaging outputs go to `dist/`. For manual Apple Silicon releases, follow the [local release procedure](docs/manual-release.md): build on a Mac, ZIP the app, and upload it with `gh`. No GitHub Actions or Secrets are required. Releases are not notarized; macOS may block the first launch. Updates are installed manually from GitHub Releases.
 
 For development, API keys can also be set through `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GOOGLE_API_KEY`, including in a `.env` file at the project root. Keys saved in Settings take precedence.
 

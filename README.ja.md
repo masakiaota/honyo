@@ -197,7 +197,7 @@ npm start
 | `npm run dist:win`     | Windows 向けのローカルパッケージを作る |
 | `npm run dist:linux`   | Linux 向けのローカルパッケージを作る   |
 
-パッケージの出力先は `dist/` になる。対象の OS 上で、その OS のビルドツールを使って作成する。公開設定とリリースの自動処理にはフォーク元の配布先が残っているため、公開する際はこの派生版向けに設定する必要がある。
+パッケージの出力先は `dist/` になる。Apple Silicon 向けの配布は[ローカルリリース手順書](docs/manual-release.md)に従い、Mac でビルドしたアプリを ZIP にして `gh` で公開する。GitHub Actions や Secrets は不要だ。公証は行わないため、macOS が初回起動をブロックする場合がある。更新は GitHub Releases から手動で行う。
 
 開発時には、環境変数 `ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GOOGLE_API_KEY` でも API キーを指定できる。プロジェクト直下の `.env` ファイルも使える。設定画面で保存したキーが優先される。
 
