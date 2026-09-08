@@ -79,7 +79,11 @@ function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; err
       return { valid: false, error: `Unknown model: ${config.aiModel}` };
     }
 
-    if (modelInfo.provider === 'codex' || modelInfo.provider === 'local') {
+    if (modelInfo.provider === 'local') {
+      return { valid: true };
+    }
+
+    if (modelInfo.provider === 'codex') {
       return { valid: false, error: 'ChatGPT/Codex account is not connected' };
     }
 
