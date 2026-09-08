@@ -29,7 +29,7 @@
         display: flex;
       }
       .tab {
-        padding: 15px 30px;
+        padding: 15px 18px;
         cursor: pointer;
         background: none;
         border: none;
@@ -248,7 +248,8 @@
   <body>
     <div class="tabs">
       <div class="tab-group">
-        <button class="tab active" onclick="switchTab('api-keys')">API Keys</button>
+        <button class="tab active" onclick="switchTab('offline')">Offline Translation</button>
+        <button class="tab" onclick="switchTab('api-keys')">API Keys</button>
         <button class="tab" onclick="switchTab('model')">Model</button>
         <button class="tab" onclick="switchTab('customization')">Customization</button>
         <button class="tab" onclick="switchTab('general')">General</button>
@@ -257,7 +258,100 @@
     </div>
 
     <div class="content">
-      <div id="api-keys" class="tab-panel active">
+      <div id="offline" class="tab-panel active">
+        <div class="container">
+          <h2>Translate on this Mac</h2>
+          <p>
+            Translate between English and Japanese without API keys or an account. Your text stays
+            on this Mac.
+          </p>
+          <div class="form-group">
+            <label>Hy-MT2 · 1.8B</label>
+            <div class="help-text">
+              One-time download: 1.13 GB. Works offline after setup. Requires an Apple Silicon Mac.
+            </div>
+            <div class="help-text">
+              Keeps the selected model in memory for faster translations. Switching to another model
+              releases it.
+            </div>
+            <p id="local-state" role="status" aria-live="polite">Checking model…</p>
+            <progress id="local-progress" max="100" value="0" style="width: 100%" hidden></progress>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px">
+              <button
+                class="save-btn"
+                id="local-install"
+                onclick="ipcRenderer.send('install-local-model')"
+                disabled
+              >
+                Download (1.13 GB)
+              </button>
+              <button
+                class="save-btn"
+                id="local-select"
+                onclick="ipcRenderer.send('select-local-model')"
+                disabled
+              >
+                Use this model
+              </button>
+              <button
+                class="reset-btn"
+                id="local-cancel"
+                onclick="ipcRenderer.send('cancel-local-download')"
+                hidden
+              >
+                Cancel
+              </button>
+              <button class="reset-btn" id="local-delete" onclick="deleteLocalModel()" disabled>
+                Delete model
+              </button>
+            </div>
+            <div class="help-text">
+              Use this model switches to English ↔ Japanese and popup display. Changes are saved
+              immediately.
+            </div>
+            <p id="local-error" role="alert" style="color: #bf3838"></p>
+            <div class="help-text" id="local-path" style="overflow-wrap: anywhere"></div>
+            <div class="help-text">
+              <a href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF" target="_blank"
+                >Model source</a
+              >
+              ·
+              <a
+                href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/blob/a0c709d9fac510f2c807aa3af52872340dc37a4a/LICENSE.txt"
+                target="_blank"
+                >Apache 2.0 license</a
+              >
+              applies to the downloaded model.
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="local-input">Try a translation</label>
+            <textarea
+              id="local-input"
+              rows="3"
+              maxlength="2000"
+              placeholder="Enter English or Japanese text"
+            >
+The update will not delete your files.</textarea
+            >
+            <button class="save-btn" id="local-test" onclick="testLocalModel()" disabled>
+              Translate
+            </button>
+            <p id="local-test-meta" role="status"></p>
+            <div
+              id="local-result"
+              style="white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7"
+              aria-live="polite"
+            ></div>
+          </div>
+          <p class="help-text">
+            Up to 2,000 characters per translation. Text appears as it is generated. Custom prompts
+            and AI prompt generation are not supported. Review names, technical terms, and ambiguous
+            passages.
+          </p>
+        </div>
+      </div>
+      <div id="api-keys" class="tab-panel">
         <div class="container">
           <h2>API Key Settings</h2>
 
@@ -532,17 +626,86 @@ For example:
         display: false,
       };
 
+      ipcRenderer.on('settings-tab', (_event, tab) => switchTab(tab));
+      let localWasSelected;
+      ipcRenderer.on('local-model-state', (_event, state) => {
+        if (localWasSelected !== state.selected) {
+          localWasSelected = state.selected;
+          ipcRenderer.send('load-openai-reasoning-effort');
+        }
+        const downloading = state.phase === 'downloading' || state.phase === 'verifying';
+        const percent = Math.min(100, Math.round((state.bytes / state.total) * 100));
+        const labels = {
+          downloading: `Downloading ${percent}%`,
+          verifying: 'Verifying model…',
+          loading: 'Loading into memory…',
+          translating: 'Translating…',
+        };
+        document.getElementById('local-state').textContent = !state.supported
+          ? 'Available on Apple Silicon Macs.'
+          : labels[state.phase] ||
+            (state.installed
+              ? state.selected
+                ? 'Selected · Ready for offline translation'
+                : 'Downloaded · Ready to select'
+              : 'Download the model to get started');
+        document.getElementById('local-progress').hidden = !downloading;
+        document.getElementById('local-progress').value = percent;
+        document.getElementById('local-install').hidden = state.installed;
+        document.getElementById('local-install').disabled = !state.supported || state.busy;
+        document.getElementById('local-select').disabled =
+          !state.supported || !state.installed || state.busy || state.selected;
+        document.getElementById('local-select').textContent = state.selected
+          ? 'Selected'
+          : 'Use this model';
+        document.getElementById('local-cancel').hidden = !downloading;
+        document.getElementById('local-delete').disabled = !state.installed || state.busy;
+        document.getElementById('local-test').disabled =
+          !state.supported || !state.installed || state.busy;
+        document.getElementById('local-path').textContent = `Storage: ${state.path}`;
+        if (state.error) document.getElementById('local-error').textContent = state.error;
+        document.getElementById('generate-prompt-btn').disabled = state.selected;
+      });
+      ipcRenderer.on('local-model-error', (_event, error) => {
+        document.getElementById('local-error').textContent = error;
+      });
+      function deleteLocalModel() {
+        if (
+          confirm(
+            'Delete the downloaded model (1.13 GB)? You will need to download it again to use offline translation.',
+          )
+        )
+          ipcRenderer.send('delete-local-model');
+      }
+      function testLocalModel() {
+        document.getElementById('local-test-meta').textContent = 'Translating…';
+        document.getElementById('local-result').textContent = '';
+        document.getElementById('local-error').textContent = '';
+        ipcRenderer.send('test-local-model', document.getElementById('local-input').value);
+      }
+      ipcRenderer.on('local-test-chunk', (_event, chunk) => {
+        document.getElementById('local-result').textContent = chunk;
+      });
+      ipcRenderer.on('local-test-result', (_event, result) => {
+        document.getElementById('local-test-meta').textContent =
+          result.error ||
+          `${result.sourceLanguage} → ${result.targetLanguage} · ${result.seconds.toFixed(1)} s`;
+        document.getElementById('local-result').textContent = result.translation || '';
+      });
+
       // Tab switching
       function switchTab(tabName) {
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
 
-        event.target.classList.add('active');
+        document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`)?.classList.add('active');
         document.getElementById(tabName).classList.add('active');
       }
 
       // Load data on startup
       window.addEventListener('DOMContentLoaded', () => {
+        ipcRenderer.send('load-local-model');
+        if (location.hash === '#offline') switchTab('offline');
         ipcRenderer.send('load-codex-account');
         ipcRenderer.send('load-api-keys');
         ipcRenderer.send('load-custom-prompt');

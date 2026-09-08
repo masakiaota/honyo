@@ -1,3 +1,4 @@
+import { LOCAL_MODEL, LOCAL_MODEL_ID } from './local/model.ts';
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -264,7 +265,19 @@ function buildAvailableModels(fromCache: ModelsCache | null): Record<string, AIM
 export function getAvailableModels(): Record<string, AIModelInfo> {
   if (!cacheLoaded) loadModelsCache();
 
-  const result = { ...buildAvailableModels(cache), ...codexModels };
+  const result: Record<string, AIModelInfo> = {
+    ...buildAvailableModels(cache),
+    ...codexModels,
+    ...(process.platform === 'darwin' && process.arch === 'arm64'
+      ? {
+          [LOCAL_MODEL_ID]: {
+            name: LOCAL_MODEL.name,
+            provider: 'local' as const,
+            model: LOCAL_MODEL_ID,
+          },
+        }
+      : {}),
+  };
 
   // Safety net: keep the selected model resolvable even if it dropped out of the
   // fetched/capped list (refreshModels also pins it into the cache itself).
@@ -301,7 +314,7 @@ function pinSelectedModel(models: Partial<Record<Provider, AIModelInfo[]>>): voi
   if (!key || key === CUSTOM_MODEL_ID) return;
 
   const info = buildAvailableModels(cache)[key] ?? AI_MODELS[key];
-  if (!info || info.provider === 'codex') return;
+  if (!info || info.provider === 'codex' || info.provider === 'local') return;
 
   const list = models[info.provider];
   if (!list) {

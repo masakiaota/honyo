@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const sendChannels = new Set([
+  'load-local-model',
+  'install-local-model',
+  'cancel-local-download',
+  'delete-local-model',
+  'select-local-model',
+  'test-local-model',
   'load-codex-account',
   'start-codex-login',
   'logout-codex',
@@ -25,6 +31,11 @@ const sendChannels = new Set([
 ]);
 
 const receiveChannels = new Set([
+  'local-model-state',
+  'local-model-error',
+  'local-test-result',
+  'local-test-chunk',
+  'settings-tab',
   'codex-account-loaded',
   'codex-account-changed',
   'codex-login-started',

@@ -37,8 +37,8 @@ export function getAIProvider(
   if (!modelInfo) {
     throw new Error(`Unknown model: ${modelId}`);
   }
-  if (modelInfo.provider === 'codex') {
-    throw new Error('ChatGPT/Codex models must use the Codex translation provider');
+  if (modelInfo.provider === 'codex' || modelInfo.provider === 'local') {
+    throw new Error('This model uses a dedicated translation engine');
   }
 
   const apiKey = apiKeys[modelInfo.provider];

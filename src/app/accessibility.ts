@@ -63,7 +63,7 @@ export function openSetupWindow(): void {
     height: 760,
     minWidth: 480,
     minHeight: 560,
-    title: 'Honyoの準備',
+    title: 'Set up Honyo',
     backgroundColor: '#f5f6f8',
     webPreferences: {
       preload: join(app.getAppPath(), 'build/ui/setup-preload.js'),

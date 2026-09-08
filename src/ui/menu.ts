@@ -1,3 +1,4 @@
+import { LOCAL_MODEL_ID } from '../local/model.ts';
 import type { Tray } from 'electron';
 import { Menu, app } from 'electron';
 import { uIOhook } from 'uiohook-napi';
@@ -144,16 +145,30 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
           openai: Array<[string, AIModelInfo]>;
           google: Array<[string, AIModelInfo]>;
           codex: Array<[string, AIModelInfo]>;
+          local: Array<[string, AIModelInfo]>;
         } = {
           anthropic: [],
           openai: [],
           google: [],
           codex: [],
+          local: [],
         };
 
         for (const [modelId, modelInfo] of Object.entries(getAvailableModels())) {
           modelsByProvider[modelInfo.provider].push([modelId, modelInfo]);
         }
+
+        for (const [, modelInfo] of modelsByProvider.local) {
+          menuItems.push({
+            label: modelInfo.name,
+            type: 'radio',
+            checked: config.aiModel === LOCAL_MODEL_ID,
+            click: (): void => {
+              openSettingsWindow('offline');
+            },
+          });
+        }
+        if (modelsByProvider.local.length) menuItems.push({ type: 'separator' });
 
         // Add Anthropic models
         for (const [modelId, modelInfo] of modelsByProvider.anthropic) {
@@ -231,7 +246,7 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
       })(),
     },
     {
-      label: '初期設定・権限の確認…',
+      label: 'Setup and Permissions…',
       click: (): void => openSetupWindow(),
     },
     {

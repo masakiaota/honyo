@@ -6,13 +6,13 @@ async function refresh() {
     $('app-name').textContent = state.appName;
     if (state.granted === previous) return;
     previous = state.granted;
-    $('badge').textContent = state.granted ? '✓ 許可済み' : '許可が必要';
+    $('badge').textContent = state.granted ? '✓ Granted' : 'Permission needed';
     $('badge').classList.toggle('granted', state.granted);
     $('finish').disabled = !state.granted;
-    $('finish').textContent = state.granted ? 'Honyoを使い始める' : '許可を待っています';
+    $('finish').textContent = state.granted ? 'Start Honyo' : 'Waiting for permission';
     $('hint').textContent = state.granted
-      ? '許可を確認できました。翻訳サービスの設定が済んだら、開始してください。'
-      : 'macOSの設定で許可してください。この画面を閉じても、メニューバーから再開できます。';
+      ? 'Permission granted. Choose a translation model in Settings, then start Honyo.'
+      : 'Grant permission in macOS Settings. You can reopen this screen from the menu bar.';
     $('steps').hidden = state.granted;
     $('permission').hidden = state.granted;
   } catch {
@@ -22,7 +22,7 @@ async function refresh() {
 function showError() {
   $('error').hidden = false;
   $('error').textContent =
-    '操作を完了できませんでした。もう一度お試しください。設定が開かない場合は、システム設定 → プライバシーとセキュリティ → アクセシビリティを開いてください。';
+    'Could not complete this action. Please try again, or open System Settings → Privacy & Security → Accessibility.';
 }
 for (const action of ['permission', 'reveal', 'restart', 'settings', 'finish']) {
   $(action).addEventListener('click', async () => {
