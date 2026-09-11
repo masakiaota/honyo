@@ -2,10 +2,6 @@
 
 The default local model is **Tencent Hy-MT2 1.8B Q4_K_M** (1,133,080,448 bytes). It offers a useful balance of latency, memory, and translation discipline for a menu-bar application. This is a practical selection from a small manual evaluation, not a claim that it is the best model on a representative Japanese-English benchmark.
 
-For a follow-up focused on time to first visible text, see the [48-case streaming and quality comparison](translation-streaming-comparison.md).
-
-The [additional three-model evaluation](additional-local-models.md) covers newer Japanese LFM, Qwen3.5 4B, and Shisa 3B models with 60 cases and a separate input-framing check.
-
 ## Comparison
 
 Measured on this M3 MacBook Air, 24 GB unified memory, macOS, using node-llama-cpp 3.20.0, Metal, 2 CPU threads, 4,096-token contexts, batch size 128, flash attention, greedy decoding, repetition penalty 1.05, and a fresh context for every input. Models ran sequentially; ordinary desktop workloads and downloads continued in the background. These are approximate application-oriented measurements, not isolated lab benchmarks. RSS is the inference process's resident memory, not whole-system memory or a hard memory cap.
@@ -58,10 +54,6 @@ Model revision and hash for the shipped choice are in `src/local/model.ts`. Nati
 - [Google TranslateGemma](https://huggingface.co/google/translategemma-4b-it): translation template and model description. Evaluation used the [public GGUF conversion](https://huggingface.co/mradermacher/translategemma-4b-it-GGUF), revision `35a7486e128b19642cdc72d7b91b21ba388aaf42`.
 - [Unsloth Qwen3.5 GGUF](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF): evaluation used revision `f6d5376be1edb4d416d56da11e5397a961aca8ae`.
 - [node-llama-cpp Electron guide](https://node-llama-cpp.withcat.ai/guide/electron): native packaging and main-process execution.
-
-## 7B model comparison
-
-See the [M3 Air evaluation of Hy-MT2 7B and CAT-Translate](seven-billion-translation.md) for quality examples, first-text latency, memory use, and reproducible outputs. This evaluation does not change the shipped model.
 
 ## Choosing the 7B model
 

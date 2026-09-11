@@ -15,3 +15,7 @@ dev-app-update.yml
 
 .playwright-cli/
 output/playwright/
+
+# Model comparison outputs (existing tracked files are unaffected)
+/docs/evaluation/
+/output/model-evaluation/
