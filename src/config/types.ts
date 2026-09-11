@@ -16,6 +16,12 @@ export const OPENAI_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh
 export type OpenAIReasoningEffort = (typeof OPENAI_REASONING_EFFORTS)[number];
 
 export interface Config {
+  modelHistory?: Partial<
+    Record<
+      'local' | 'codex' | 'openai' | 'anthropic' | 'google',
+      { modelId: string; customModel: string }
+    >
+  >;
   targetLanguage: string;
   secondaryLanguage: string;
   isPaused: boolean;

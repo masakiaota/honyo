@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openSettingsWindow } from './ui/settings.ts';
-import { LOCAL_MODEL_ID } from './local/model.ts';
+import { isLocalModel } from './local/model.ts';
 import { warmLocal } from './local/index.ts';
 import { app } from 'electron';
 import { initializeConfig, getConfig } from './config/index.ts';
@@ -40,7 +40,7 @@ function initialize(): void {
     // Initialize configuration
     const firstLaunch = !existsSync(join(app.getPath('userData'), 'config.json'));
     initializeConfig();
-    if (getConfig().aiModel === LOCAL_MODEL_ID) void warmLocal();
+    if (isLocalModel(getConfig().aiModel)) void warmLocal(getConfig().aiModel);
 
     // Pin the currently-selected model so the model-list cap never drops it
     setSelectedModelProvider(() => getConfig().aiModel);

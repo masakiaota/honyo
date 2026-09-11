@@ -1,10 +1,8 @@
-import { LOCAL_MODEL_ID } from '../local/model.ts';
+import { isLocalModel } from '../local/model.ts';
 import { releaseLocal } from '../local/index.ts';
 import { app } from 'electron';
 import { config as loadEnv } from 'dotenv';
-import { DEFAULT_AI_MODEL, CUSTOM_MODEL_ID } from '../models.ts';
-import { isCodexModelKey } from '../codex/models.ts';
-import { getModelInfo } from '../models-remote.ts';
+import { DEFAULT_AI_MODEL } from '../models.ts';
 import { getLanguageFromLocale } from '../language/index.ts';
 import { LANGUAGES } from '../language/constants.ts';
 import {
@@ -71,15 +69,7 @@ export function initializeConfig(): void {
     config.secondaryLanguage = newDefaultConfig.secondaryLanguage;
   }
 
-  // Validate AI model exists (custom model is always allowed)
-  if (
-    config.aiModel !== CUSTOM_MODEL_ID &&
-    !isCodexModelKey(config.aiModel) &&
-    !getModelInfo(config.aiModel)
-  ) {
-    console.log(`Invalid AI model: ${config.aiModel}, resetting to default`);
-    config.aiModel = DEFAULT_AI_MODEL;
-  }
+  // Keep the saved selection when its provider catalog is temporarily unavailable.
 
   // Initialize custom prompt if not present
   if (config.customPrompt === undefined) {
@@ -128,11 +118,25 @@ export function getConfig(): Config {
   return config;
 }
 
-export function updateConfig(updates: Partial<Config>): void {
-  if (config.aiModel === LOCAL_MODEL_ID && updates.aiModel && updates.aiModel !== LOCAL_MODEL_ID)
+const configListeners = new Set<() => void>();
+export function subscribeConfig(listener: () => void): () => void {
+  configListeners.add(listener);
+  return () => configListeners.delete(listener);
+}
+export function updateConfig(
+  updates: Partial<Config>,
+  options: { localModelPrepared?: boolean } = {},
+): void {
+  if (
+    !options.localModelPrepared &&
+    isLocalModel(config.aiModel) &&
+    updates.aiModel &&
+    updates.aiModel !== config.aiModel
+  )
     releaseLocal();
   config = { ...config, ...updates };
   saveConfig();
+  for (const listener of configListeners) listener();
 }
 
 // Clear the persisted popup size so the next popup uses the default 400x200.

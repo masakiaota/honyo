@@ -1,0 +1,66 @@
+{
+  "hy": {
+    "firstChunkMs": {
+      "median": 177.6,
+      "p95": 222.8,
+      "max": 301.4
+    },
+    "first20CharsMs": {
+      "median": 333.1,
+      "p95": 476.4,
+      "max": 589.5
+    },
+    "ms": {
+      "median": 742.6,
+      "p95": 1780.5,
+      "max": 2536.6
+    },
+    "maxChunkGapMs": {
+      "median": 23.9,
+      "p95": 63.9,
+      "max": 114.8
+    },
+    "rssMB": {
+      "median": 1618.3,
+      "p95": 1620.4,
+      "max": 1621.0
+    },
+    "EnglishCharsPerSec": 216.9,
+    "JapaneseCharsPerSec": 71.8,
+    "firstAfterLoadMs": 382.5456250000002,
+    "loadMs": 1491.657833,
+    "sameAcrossRounds": 48
+  },
+  "gemma": {
+    "firstChunkMs": {
+      "median": 388.4,
+      "p95": 829.6,
+      "max": 969.4
+    },
+    "first20CharsMs": {
+      "median": 709.4,
+      "p95": 1160.7,
+      "max": 1451.1
+    },
+    "ms": {
+      "median": 1264.8,
+      "p95": 4306.2,
+      "max": 6198.2
+    },
+    "maxChunkGapMs": {
+      "median": 44.9,
+      "p95": 112.0,
+      "max": 251.2
+    },
+    "rssMB": {
+      "median": 2803.1,
+      "p95": 2808.3,
+      "max": 2811.7
+    },
+    "EnglishCharsPerSec": 109.4,
+    "JapaneseCharsPerSec": 50.7,
+    "firstAfterLoadMs": 605.8343329999998,
+    "loadMs": 2225.4048749999997,
+    "sameAcrossRounds": 48
+  }
+}

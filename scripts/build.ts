@@ -67,6 +67,7 @@ try {
   await fixImports(buildDir);
   buildMacOSSelectionAnchor();
   console.log('Import extensions fixed!');
+  await esbuild.build({entryPoints: ['src/ui/model-settings-renderer.ts'], bundle: true, platform: 'browser', format: 'iife', outfile: 'build/ui/model-settings-renderer.js'});
 } catch (error) {
   console.error('Build failed:', error);
   process.exit(1);

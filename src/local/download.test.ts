@@ -55,3 +55,25 @@ it('does not commit when cancellation occurs during download', async () => {
   ).rejects.toThrow();
   expect(await readdir(directory)).toEqual([]);
 });
+
+it('uses the chosen model file, URL and checksum without replacing another installed model', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('GGUF')));
+  const first = await downloadModel(directory, new AbortController().signal, vi.fn());
+  const model = {
+    name: '7B',
+    file: 'seven.gguf',
+    bytes: 8,
+    sha256: createHash('sha256').update('GGUF7B!!').digest('hex'),
+    url: 'https://example.test/seven',
+    memory: 'test',
+    template: 'hy7' as const,
+  };
+  const fetch = vi.fn().mockResolvedValue(new Response('GGUF7B!!'));
+  vi.stubGlobal('fetch', fetch);
+  const second = await downloadModel(directory, new AbortController().signal, vi.fn(), model);
+  expect(fetch).toHaveBeenCalledWith(model.url, expect.anything());
+  expect(await verifyModel(second, undefined, model)).toBe(true);
+  expect(await verifyModel(first, undefined, model)).toBe(false);
+  expect(await readFile(first, 'utf8')).toBe('GGUF');
+  expect((await readdir(directory)).sort()).toEqual(['model.gguf', 'seven.gguf']);
+});

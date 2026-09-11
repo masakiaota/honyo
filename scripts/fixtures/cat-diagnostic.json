@@ -1,0 +1,82 @@
+[
+  {
+    "target": "Japanese",
+    "text": "The update will not delete your files. Please restart the application after saving your work.",
+    "originalCaseIndex": 0
+  },
+  {
+    "target": "Japanese",
+    "text": "The request timed out after 30 seconds. Retry only if the operation is idempotent.",
+    "originalCaseIndex": 2
+  },
+  {
+    "target": "English",
+    "text": "必ずしも全員がこの提案に賛成しているわけではありません。",
+    "originalCaseIndex": 3
+  },
+  {
+    "target": "Japanese",
+    "text": "Please keep the door closed unless the room is being cleaned.",
+    "originalCaseIndex": 19
+  },
+  {
+    "target": "Japanese",
+    "text": "Do not retry the payment unless you have confirmed that the first attempt failed. A timeout does not mean the customer was not charged.",
+    "originalCaseIndex": 20
+  },
+  {
+    "target": "Japanese",
+    "text": "We can ship the replacement by Friday, but we cannot guarantee that it will arrive by then.",
+    "originalCaseIndex": 22
+  },
+  {
+    "target": "Japanese",
+    "text": "The migration is backward compatible. Existing clients can keep using the old endpoint until the deprecation period ends.",
+    "originalCaseIndex": 24
+  },
+  {
+    "target": "Japanese",
+    "text": "I would appreciate it if you could take another look when you have a moment. There is no rush.",
+    "originalCaseIndex": 28
+  },
+  {
+    "target": "Japanese",
+    "text": "That sounds good in theory, but I am not convinced it will work in practice.",
+    "originalCaseIndex": 30
+  },
+  {
+    "target": "Japanese",
+    "text": "Alice told Bob that Carol had already reviewed his changes. Bob, not Alice, then merged the pull request.",
+    "originalCaseIndex": 34
+  },
+  {
+    "target": "Japanese",
+    "text": "Set `retry_count` to `0` to disable retries. Do not change `timeout_ms=30000`. See https://example.com/docs?lang=en&mode=offline for details.",
+    "originalCaseIndex": 36
+  },
+  {
+    "target": "English",
+    "text": "「嫌いになったわけじゃない。ただ、今は一人で考える時間がほしい」と彼女は言った。",
+    "originalCaseIndex": 39
+  },
+  {
+    "target": "Japanese",
+    "text": "The refund has been approved, but it has not been issued yet. It may take up to five business days to appear on your statement.",
+    "originalCaseIndex": 48
+  },
+  {
+    "target": "English",
+    "text": "値は80から60に減りました。減少率は20%ではなく25%です。",
+    "originalCaseIndex": 53
+  },
+  {
+    "target": "Japanese",
+    "text": "If the lock is already held, return immediately without modifying the file. Release the lock only if this process acquired it.",
+    "originalCaseIndex": 54
+  },
+  {
+    "target": "Japanese",
+    "text": "I can live with that, as long as we do not have to start over.",
+    "originalCaseIndex": 58
+  }
+]

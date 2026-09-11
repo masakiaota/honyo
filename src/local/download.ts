@@ -5,17 +5,21 @@ import { mkdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { LOCAL_MODEL } from './model.ts';
+import { LOCAL_MODEL, type LocalModel } from './model.ts';
 
-export async function verifyModel(path: string, signal?: AbortSignal): Promise<boolean> {
+export async function verifyModel(
+  path: string,
+  signal?: AbortSignal,
+  model: LocalModel = LOCAL_MODEL,
+): Promise<boolean> {
   try {
-    if ((await stat(path)).size !== LOCAL_MODEL.bytes) return false;
+    if ((await stat(path)).size !== model.bytes) return false;
     const hash = createHash('sha256');
     for await (const chunk of createReadStream(path)) {
       signal?.throwIfAborted();
       hash.update(chunk as Buffer);
     }
-    return hash.digest('hex') === LOCAL_MODEL.sha256;
+    return hash.digest('hex') === model.sha256;
   } catch (error) {
     signal?.throwIfAborted();
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
@@ -28,18 +32,21 @@ export async function downloadModel(
   directory: string,
   signal: AbortSignal,
   progress: (bytes: number, verifying: boolean) => void,
+  model: LocalModel = LOCAL_MODEL,
 ): Promise<string> {
   await mkdir(directory, { recursive: true });
-  const destination = join(directory, LOCAL_MODEL.file);
-  if (await verifyModel(destination, signal)) return destination;
+  const destination = join(directory, model.file);
+  if (await verifyModel(destination, signal, model)) return destination;
   const space = await statfs(directory);
-  if (space.bavail * space.bsize < LOCAL_MODEL.bytes + 256 * 1024 * 1024)
-    throw new Error('Not enough disk space. Free at least 1.4 GB and try again.');
+  if (space.bavail * space.bsize < model.bytes + 256 * 1024 * 1024)
+    throw new Error(
+      `Not enough disk space. Free at least ${((model.bytes + 256 * 1024 * 1024) / 1e9).toFixed(1)} GB and try again.`,
+    );
   const partial = destination + '.partial';
   let bytes = 0;
   const hash = createHash('sha256');
   try {
-    const response = await fetch(LOCAL_MODEL.url, {
+    const response = await fetch(model.url, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(30 * 60 * 1000)]),
     });
     if (!response.ok || !response.body)
@@ -47,7 +54,7 @@ export async function downloadModel(
     const meter = new Transform({
       transform(chunk: Buffer, _encoding, callback): void {
         bytes += chunk.length;
-        if (bytes > LOCAL_MODEL.bytes) {
+        if (bytes > model.bytes) {
           callback(new Error('The model size does not match the expected file.'));
           return;
         }
@@ -63,7 +70,7 @@ export async function downloadModel(
       { signal },
     );
     progress(bytes, true);
-    if (bytes !== LOCAL_MODEL.bytes || hash.digest('hex') !== LOCAL_MODEL.sha256)
+    if (bytes !== model.bytes || hash.digest('hex') !== model.sha256)
       throw new Error('Model verification failed. Please download it again.');
     signal.throwIfAborted();
     await rename(partial, destination);

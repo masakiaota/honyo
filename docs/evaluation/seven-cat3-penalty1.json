@@ -1,0 +1,329 @@
+[
+  {
+    "model": "cat-translate-3.3b-Q4_K_M.gguf",
+    "family": "cat3",
+    "repetitionPenalty": 1,
+    "framing": "raw",
+    "loadMs": 1451.194625
+  },
+  {
+    "round": 0,
+    "caseIndex": 0,
+    "source": "The update will not delete your files. Please restart the application after saving your work.",
+    "target": "Japanese",
+    "response": "このアップデートではファイルは削除されません。作業を保存する前にアプリケーションを再起動してください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1112.3090410000002,
+    "firstChunkMs": 562.3670829999999,
+    "first20CharsMs": 750.1709160000003,
+    "maxChunkGapMs": 43.031124999999975,
+    "outputChars": 51,
+    "rssMB": 2787.203125,
+    "cpu": {
+      "user": 112907,
+      "system": 92573
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 1,
+    "source": "The request timed out after 30 seconds. Retry only if the operation is idempotent.",
+    "target": "Japanese",
+    "response": "リクエストは30秒後にタイムアウトしました。操作が冪等である場合にのみ再試行してください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1075.65,
+    "firstChunkMs": 240.43645800000013,
+    "first20CharsMs": 534.000458,
+    "maxChunkGapMs": 144.28995799999984,
+    "outputChars": 45,
+    "rssMB": 2788.578125,
+    "cpu": {
+      "user": 140944,
+      "system": 69437
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 2,
+    "source": "必ずしも全員がこの提案に賛成しているわけではありません。",
+    "target": "English",
+    "response": "Not s e l e c t e d a ll a r e g a n d t h i s p o s i t i o n.",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 2394.103667,
+    "firstChunkMs": 233.80308400000058,
+    "first20CharsMs": 846.68525,
+    "maxChunkGapMs": 40.26566599999933,
+    "outputChars": 63,
+    "rssMB": 2789.15625,
+    "cpu": {
+      "user": 301255,
+      "system": 155041
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 3,
+    "source": "Please keep the door closed unless the room is being cleaned.",
+    "target": "Japanese",
+    "response": "部屋が清掃中以外は、1階の扉を閉めておいてください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 668.6770000000006,
+    "firstChunkMs": 232.76691700000083,
+    "first20CharsMs": 597.4171670000005,
+    "maxChunkGapMs": 40.79387499999939,
+    "outputChars": 26,
+    "rssMB": 2789.875,
+    "cpu": {
+      "user": 74243,
+      "system": 42429
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 4,
+    "source": "Do not retry the payment unless you have confirmed that the first attempt failed. A timeout does not mean the customer was not charged.",
+    "target": "Japanese",
+    "response": "最初の試みが失敗したことを確認してから、1回だけ再試行してください。タイムアウトは、顧客が課金されていないことを意味するものではありません。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1194.5929589999996,
+    "firstChunkMs": 252.15700000000015,
+    "first20CharsMs": 473.9729589999997,
+    "maxChunkGapMs": 40.875458999999864,
+    "outputChars": 70,
+    "rssMB": 2791.90625,
+    "cpu": {
+      "user": 166527,
+      "system": 76959
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 5,
+    "source": "We can ship the replacement by Friday, but we cannot guarantee that it will arrive by then.",
+    "target": "Japanese",
+    "response": "代替品は金曜日に発送できますが、100%その日までに届くことを保証することはできません。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 887.3096249999999,
+    "firstChunkMs": 235.58520800000042,
+    "first20CharsMs": 600.6624580000007,
+    "maxChunkGapMs": 41.34608399999888,
+    "outputChars": 44,
+    "rssMB": 2792.65625,
+    "cpu": {
+      "user": 112863,
+      "system": 55973
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 6,
+    "source": "The migration is backward compatible. Existing clients can keep using the old endpoint until the deprecation period ends.",
+    "target": "Japanese",
+    "response": "このマイグレーションは後方互換性があります。既存のクライアントは、1つのエンドポイントを引き続き使用できます。ただし、そのエンドポイントは廃止期間が終了するまでです。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1371.0896670000002,
+    "firstChunkMs": 246.4153750000005,
+    "first20CharsMs": 503.11874999999964,
+    "maxChunkGapMs": 39.74112499999865,
+    "outputChars": 83,
+    "rssMB": 2794.296875,
+    "cpu": {
+      "user": 190656,
+      "system": 86345
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 7,
+    "source": "I would appreciate it if you could take another look when you have a moment. There is no rush.",
+    "target": "Japanese",
+    "response": "お時間のある時に、1度だけご確認いただければ幸いです。 急ぎませんので、どうぞごゆっくりご覧ください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 931.6849170000005,
+    "firstChunkMs": 245.42133400000057,
+    "first20CharsMs": 499.19508399999904,
+    "maxChunkGapMs": 39.450457999999344,
+    "outputChars": 51,
+    "rssMB": 2795.328125,
+    "cpu": {
+      "user": 122378,
+      "system": 58462
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 8,
+    "source": "That sounds good in theory, but I am not convinced it will work in practice.",
+    "target": "Japanese",
+    "response": "それは理論上は良さそうですが、100%うまくいくとは思えません。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 707.1149589999986,
+    "firstChunkMs": 234.70774999999958,
+    "first20CharsMs": 599.0444589999988,
+    "maxChunkGapMs": 41.86833400000069,
+    "outputChars": 32,
+    "rssMB": 2796.390625,
+    "cpu": {
+      "user": 88227,
+      "system": 44722
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 9,
+    "source": "Alice told Bob that Carol had already reviewed his changes. Bob, not Alice, then merged the pull request.",
+    "target": "Japanese",
+    "response": "アリスはボブに、1キャロルが彼の変更をすでにレビューしたと伝えた。ボブはアリスではなく、プルリクエストをマージした。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1250.1864999999998,
+    "firstChunkMs": 238.3829999999998,
+    "first20CharsMs": 638.2608330000003,
+    "maxChunkGapMs": 38.81162500000028,
+    "outputChars": 58,
+    "rssMB": 2797.953125,
+    "cpu": {
+      "user": 167596,
+      "system": 78155
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 10,
+    "source": "Set `retry_count` to `0` to disable retries. Do not change `timeout_ms=30000`. See https://example.com/docs?lang=en&mode=offline for details.",
+    "target": "Japanese",
+    "response": "`retry_count` 1 を 0 に設定してリトライを無効にします。`timeout_ms=30000` は変更しないでください。詳細は https://example.com/docs?lang=en&mode=offline を参照してください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 2367.9121250000007,
+    "firstChunkMs": 327.4361250000002,
+    "first20CharsMs": 729.9466250000005,
+    "maxChunkGapMs": 42.10191699999996,
+    "outputChars": 128,
+    "rssMB": 2800.609375,
+    "cpu": {
+      "user": 364384,
+      "system": 142563
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 11,
+    "source": "「嫌いになったわけじゃない。ただ、今は一人で考える時間がほしい」と彼女は言った。",
+    "target": "English",
+    "response": "“I didn’t become a hater,” she said. “I just need some time to think by myself right now.”",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1248.9943749999984,
+    "firstChunkMs": 235.00912499999868,
+    "first20CharsMs": 493.6552909999991,
+    "maxChunkGapMs": 40.87950000000092,
+    "outputChars": 90,
+    "rssMB": 2800.21875,
+    "cpu": {
+      "user": 149325,
+      "system": 79244
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 12,
+    "source": "The refund has been approved, but it has not been issued yet. It may take up to five business days to appear on your statement.",
+    "target": "Japanese",
+    "response": "返金は承認されましたが、100%まだ発行されていません。 ご明細に表示されるまでに最大で5営業日かかる場合があります。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1109.947791999999,
+    "firstChunkMs": 241.35241699999824,
+    "first20CharsMs": 605.9317080000001,
+    "maxChunkGapMs": 39.94220800000039,
+    "outputChars": 59,
+    "rssMB": 2802.21875,
+    "cpu": {
+      "user": 152477,
+      "system": 69247
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 13,
+    "source": "値は80から60に減りました。減少率は20%ではなく25%です。",
+    "target": "English",
+    "response": "The value decreased from 180 to 60. The decline rate is 25%, not 20%.",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1281.992709000002,
+    "firstChunkMs": 234.98866700000144,
+    "first20CharsMs": 383.33470899999884,
+    "maxChunkGapMs": 41.076624999997875,
+    "outputChars": 69,
+    "rssMB": 2802.015625,
+    "cpu": {
+      "user": 156775,
+      "system": 80255
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 14,
+    "source": "If the lock is already held, return immediately without modifying the file. Release the lock only if this process acquired it.",
+    "target": "Japanese",
+    "response": "ロックが既に保持されている場合は、1度も変更せずに直ちに返却してください。このプロセスがロックを取得した場合に限り、ロックを解放してください。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 1216.894916000001,
+    "firstChunkMs": 241.5877079999991,
+    "first20CharsMs": 531.3357910000013,
+    "maxChunkGapMs": 38.82800000000134,
+    "outputChars": 71,
+    "rssMB": 2803.953125,
+    "cpu": {
+      "user": 169216,
+      "system": 76354
+    }
+  },
+  {
+    "round": 0,
+    "caseIndex": 15,
+    "source": "I can live with that, as long as we do not have to start over.",
+    "target": "Japanese",
+    "response": "それで構いません。ただし、1からやり直す必要はありません。",
+    "metadata": {
+      "stopReason": "eogToken"
+    },
+    "ms": 598.4557090000017,
+    "firstChunkMs": 233.15004200000112,
+    "first20CharsMs": 490.32516699999906,
+    "maxChunkGapMs": 41.18820799999958,
+    "outputChars": 29,
+    "rssMB": 2803.21875,
+    "cpu": {
+      "user": 66388,
+      "system": 37527
+    }
+  }
+]

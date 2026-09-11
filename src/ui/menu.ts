@@ -1,4 +1,3 @@
-import { LOCAL_MODEL_ID } from '../local/model.ts';
 import type { Tray } from 'electron';
 import { Menu, app } from 'electron';
 import { uIOhook } from 'uiohook-napi';
@@ -6,8 +5,8 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { languages } from '../language/index.ts';
-import { CUSTOM_MODEL_ID, type AIModelInfo } from '../models.ts';
-import { getAvailableModels, getModelInfo } from '../models-remote.ts';
+import { CUSTOM_MODEL_ID } from '../models.ts';
+import { getModelInfo } from '../models-remote.ts';
 import { getConfig, updateConfig, getPausedState, setPausedState } from '../config/index.ts';
 import { openSetupWindow } from '../app/accessibility.ts';
 import { openSettingsWindow } from './settings.ts';
@@ -127,124 +126,12 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
     {
       label: `AI Model: ${
         config.aiModel === CUSTOM_MODEL_ID
-          ? 'Custom Model'
+          ? (config.customModel?.model ?? 'Custom Model')
           : (getModelInfo(config.aiModel)?.name ?? 'Unknown')
       }`,
-      submenu: ((): Array<
-        | { label: string; type: 'radio'; checked: boolean; click: () => void }
-        | { type: 'separator' }
-      > => {
-        const menuItems: Array<
-          | { label: string; type: 'radio'; checked: boolean; click: () => void }
-          | { type: 'separator' }
-        > = [];
-
-        // Group models by provider
-        const modelsByProvider: {
-          anthropic: Array<[string, AIModelInfo]>;
-          openai: Array<[string, AIModelInfo]>;
-          google: Array<[string, AIModelInfo]>;
-          codex: Array<[string, AIModelInfo]>;
-          local: Array<[string, AIModelInfo]>;
-        } = {
-          anthropic: [],
-          openai: [],
-          google: [],
-          codex: [],
-          local: [],
-        };
-
-        for (const [modelId, modelInfo] of Object.entries(getAvailableModels())) {
-          modelsByProvider[modelInfo.provider].push([modelId, modelInfo]);
-        }
-
-        for (const [, modelInfo] of modelsByProvider.local) {
-          menuItems.push({
-            label: modelInfo.name,
-            type: 'radio',
-            checked: config.aiModel === LOCAL_MODEL_ID,
-            click: (): void => {
-              openSettingsWindow('offline');
-            },
-          });
-        }
-        if (modelsByProvider.local.length) menuItems.push({ type: 'separator' });
-
-        // Add Anthropic models
-        for (const [modelId, modelInfo] of modelsByProvider.anthropic) {
-          menuItems.push({
-            label: modelInfo.name,
-            type: 'radio' as const,
-            checked: config.aiModel === modelId,
-            click: (): void => {
-              updateConfig({ aiModel: modelId });
-              tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
-            },
-          });
-        }
-
-        // Add separator before OpenAI models
-        if (modelsByProvider.openai.length > 0) {
-          menuItems.push({ type: 'separator' as const });
-          for (const [modelId, modelInfo] of modelsByProvider.openai) {
-            menuItems.push({
-              label: modelInfo.name,
-              type: 'radio' as const,
-              checked: config.aiModel === modelId,
-              click: (): void => {
-                updateConfig({ aiModel: modelId });
-                tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
-              },
-            });
-          }
-        }
-
-        // Add separator before Google models
-        if (modelsByProvider.google.length > 0) {
-          menuItems.push({ type: 'separator' as const });
-          for (const [modelId, modelInfo] of modelsByProvider.google) {
-            menuItems.push({
-              label: modelInfo.name,
-              type: 'radio' as const,
-              checked: config.aiModel === modelId,
-              click: (): void => {
-                updateConfig({ aiModel: modelId });
-                tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
-              },
-            });
-          }
-        }
-
-        if (modelsByProvider.codex.length > 0) {
-          menuItems.push({ type: 'separator' as const });
-          for (const [modelId, modelInfo] of modelsByProvider.codex) {
-            menuItems.push({
-              label: modelInfo.name,
-              type: 'radio' as const,
-              checked: config.aiModel === modelId,
-              click: (): void => {
-                updateConfig({ aiModel: modelId });
-                tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
-              },
-            });
-          }
-        }
-
-        // Add separator before Custom Model
-        menuItems.push({ type: 'separator' as const });
-        menuItems.push({
-          label: 'Custom Model',
-          type: 'radio' as const,
-          checked: config.aiModel === CUSTOM_MODEL_ID,
-          click: (): void => {
-            updateConfig({ aiModel: CUSTOM_MODEL_ID });
-            tray?.setContextMenu(createTrayMenu(tray, updateTrayTitle));
-          },
-        });
-
-        return menuItems;
-      })(),
+      enabled: false,
     },
+    { label: 'Model Settings…', click: (): void => openSettingsWindow('model') },
     {
       label: 'Setup and Permissions…',
       click: (): void => openSetupWindow(),

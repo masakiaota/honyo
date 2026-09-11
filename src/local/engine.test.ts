@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 const fake = vi.hoisted(() => ({
   generate: vi.fn(),
+  text: vi.fn(),
   contextDispose: vi.fn(),
   modelDispose: vi.fn(),
   load: vi.fn(),
@@ -22,11 +23,16 @@ vi.mock('node-llama-cpp', () => {
     LlamaCompletion: class {
       generateCompletionWithMeta = fake.generate;
     },
-    LlamaText: (): { tokenize: () => number[] } => ({ tokenize: (): number[] => [1, 2, 3] }),
-    SpecialTokensText: class {},
+    LlamaText: fake.text.mockImplementation((): { tokenize: () => number[] } => ({
+      tokenize: (): number[] => [1, 2, 3],
+    })),
+    SpecialTokensText: class {
+      constructor(readonly value: string) {}
+    },
   };
 });
 import { LocalEngine } from './engine.ts';
+import { LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, getLocalModel } from './model.ts';
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -93,4 +99,21 @@ it('delivers cumulative chunks before generation finishes', async () => {
   expect(chunks.mock.calls).toEqual([['こん'], ['こんにちは']]);
   partial.resolve({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
   await expect(result).resolves.toHaveProperty('translation', 'こんにちは');
+});
+
+it.each([
+  [LOCAL_MODEL_ID, '<｜hy_begin▁of▁sentence｜><｜hy_User｜>', '<｜hy_Assistant｜>'],
+  [LOCAL_7B_MODEL_ID, '<|startoftext|>', '<|extra_0|>'],
+])('uses the model-specific role tokens for %s', async (id, start, end) => {
+  fake.generate.mockResolvedValue({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
+  await new LocalEngine('/model.gguf', getLocalModel(id)).translate(
+    'Hello <|extra_0|>',
+    'Japanese',
+    'English',
+  );
+  expect(fake.text).toHaveBeenCalledWith(
+    expect.objectContaining({ value: start }),
+    expect.stringContaining('Hello <|extra_0|>'),
+    expect.objectContaining({ value: end }),
+  );
 });

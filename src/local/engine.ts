@@ -1,13 +1,16 @@
-import type { LocalResult } from './model.ts';
+import type { LocalResult, LocalModel } from './model.ts';
 import type { LlamaModel } from 'node-llama-cpp';
-import { localDirection, validateLocalInput, validateLocalOutput } from './model.ts';
+import { LOCAL_MODEL, localDirection, validateLocalInput, validateLocalOutput } from './model.ts';
 
 /** One GPU evaluation at a time; weights stay resident until explicitly released. */
 export class LocalEngine {
   private model: LlamaModel | undefined;
   private tail: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly modelPath: string) {}
+  constructor(
+    private readonly modelPath: string,
+    private readonly spec: LocalModel = LOCAL_MODEL,
+  ) {}
 
   private exclusive<T>(action: () => Promise<T>): Promise<T> {
     const next = this.tail.then(action, action);
@@ -62,9 +65,15 @@ export class LocalEngine {
       try {
         // Source remains ordinary text: model special tokens in copied text cannot create roles.
         const input = LlamaText(
-          new SpecialTokensText('<｜hy_begin▁of▁sentence｜><｜hy_User｜>'),
+          new SpecialTokensText(
+            this.spec.template === 'hy7'
+              ? '<|startoftext|>'
+              : '<｜hy_begin▁of▁sentence｜><｜hy_User｜>',
+          ),
           `Translate the following text into ${direction.targetLanguage}. Note that you should only output the translated result without any additional explanation. Preserve meaning, negation, numbers, names, Markdown formatting, code and URLs exactly. Use standard Japanese technical terminology when translating into Japanese:\n${text}`,
-          new SpecialTokensText('<｜hy_Assistant｜>'),
+          new SpecialTokensText(
+            this.spec.template === 'hy7' ? '<|extra_0|>' : '<｜hy_Assistant｜>',
+          ),
         );
         const tokens = input.tokenize(this.model.tokenizer);
         const maxTokens = Math.min(2048, context.contextSize - tokens.length - 16);

@@ -1,4 +1,4 @@
-import { LOCAL_MODEL_ID, localDirection } from '../local/model.ts';
+import { isLocalModel, localDirection } from '../local/model.ts';
 import { translateLocal } from '../local/index.ts';
 import { Notification } from 'electron';
 import { generateText, streamText } from 'ai';
@@ -186,8 +186,15 @@ export async function translateTextDetailed(
   const config = getConfig();
   const apiKeys = getApiKeys();
 
-  if (config.aiModel === LOCAL_MODEL_ID)
-    return translateLocal(text, primaryLanguage, secondaryLanguage, signal);
+  if (isLocalModel(config.aiModel))
+    return translateLocal(
+      text,
+      primaryLanguage,
+      secondaryLanguage,
+      signal,
+      undefined,
+      config.aiModel,
+    );
 
   if (isCodexModel(config)) {
     return translateWithCodex(text, primaryLanguage, secondaryLanguage, config, signal);
@@ -265,7 +272,7 @@ export async function translateTextSafe(
   try {
     return await translateTextDetailed(text, primaryLanguage, secondaryLanguage, signal);
   } catch (error) {
-    if (getConfig().aiModel === LOCAL_MODEL_ID) throw error;
+    if (isLocalModel(getConfig().aiModel)) throw error;
     return { translation: handleTranslationError(error, getConfig()) };
   }
 }
@@ -286,12 +293,13 @@ export async function translateTextStreaming(
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
   onLanguages?: (sourceLanguage: string, targetLanguage: string) => void,
+  previewConfig?: Config,
 ): Promise<string> {
-  const config = getConfig();
+  const config = previewConfig ?? getConfig();
   const apiKeys = getApiKeys();
 
   try {
-    if (config.aiModel === LOCAL_MODEL_ID) {
+    if (isLocalModel(config.aiModel)) {
       const direction = localDirection(text, primaryLanguage, secondaryLanguage);
       onLanguages?.(direction.sourceLanguage, direction.targetLanguage);
       const result = await translateLocal(
@@ -300,6 +308,7 @@ export async function translateTextStreaming(
         secondaryLanguage,
         signal,
         onChunk,
+        config.aiModel,
       );
       onChunk(result.translation);
       return result.translation;
@@ -417,7 +426,7 @@ export async function translateTextStreaming(
     console.log('Translation complete (streaming):', finalParsed.translation.slice(0, 50) + '...');
     return finalParsed.translation.trim();
   } catch (error) {
-    if (config.aiModel === LOCAL_MODEL_ID) throw error;
+    if (previewConfig || isLocalModel(config.aiModel)) throw error;
     return handleTranslationError(error, config);
   }
 }
