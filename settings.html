@@ -243,14 +243,211 @@
       .reset-btn:hover {
         background: #d0d0d0;
       }
+
+      [hidden] {
+        display: none !important;
+      }
+      .model-container {
+        max-width: 850px;
+      }
+      .model-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .model-heading h2 {
+        margin-bottom: 6px;
+      }
+      #model-unsaved {
+        color: #946000;
+        font-size: 12px;
+        background: #fff3d7;
+        border-radius: 20px;
+        padding: 6px 12px;
+        white-space: nowrap;
+      }
+      .current-model {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        background: #f3f6fb;
+        border: 1px solid #e5eaf2;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin: 22px 0;
+      }
+      .eyebrow {
+        font-size: 10px;
+        letter-spacing: 1.1px;
+        color: #627084;
+        font-weight: 600;
+      }
+      .current-model strong {
+        font-size: 14px;
+      }
+      .model-layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 28px;
+      }
+      .provider-choice {
+        display: block;
+        width: 100%;
+        background: #fff;
+        border: 1px solid #e2e6ec;
+        border-radius: 9px;
+        text-align: left;
+        padding: 12px 14px;
+        margin: 8px 0;
+        cursor: pointer;
+        color: #263447;
+      }
+      .provider-choice strong,
+      .provider-choice span {
+        display: block;
+      }
+      .provider-choice strong {
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .provider-choice span {
+        font-size: 11px;
+        color: #747b87;
+      }
+      .provider-choice.connected span {
+        color: #267556;
+      }
+      .provider-choice[aria-pressed='true'] {
+        border-color: #1677e8;
+        background: #eff6ff;
+        box-shadow: 0 0 0 1px #1677e8;
+      }
+      .provider-choice:focus-visible {
+        outline: 3px solid #8dbcf3;
+        outline-offset: 2px;
+      }
+      .provider-choice:disabled {
+        cursor: default;
+      }
+      .connection-card {
+        background: #f8f9fb;
+        border-radius: 9px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+      }
+      #connection-summary {
+        font-size: 13px;
+        margin: 7px 0;
+      }
+      .model-column select,
+      .model-column input[type='password'],
+      .model-column input[type='text'] {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .model-column label {
+        margin-top: 10px;
+      }
+      .model-column details {
+        font-size: 12px;
+        margin-top: 10px;
+      }
+      .model-column summary,
+      .model-test summary {
+        cursor: pointer;
+        color: #425572;
+      }
+      .text-button {
+        border: 0;
+        background: transparent;
+        color: #1269c7;
+        padding: 8px 0;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .text-button:disabled {
+        color: #8e96a3;
+        cursor: default;
+      }
+      #model-options {
+        margin-top: 20px;
+        padding-top: 14px;
+        border-top: 1px solid #e6e9ee;
+      }
+      #model-options label {
+        font-size: 13px;
+      }
+      .fast-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .fast-label input {
+        width: auto;
+      }
+      .model-message {
+        font-size: 13px;
+        margin-top: 18px;
+        color: #23714a;
+        white-space: pre-wrap;
+      }
+      .model-message.error {
+        color: #b33232;
+      }
+      .model-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #e6e9ee;
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .model-test {
+        margin-top: 22px;
+        border-top: 1px solid #e6e9ee;
+        padding-top: 18px;
+        font-size: 13px;
+      }
+      .model-test textarea {
+        width: 100%;
+        min-height: 90px;
+        box-sizing: border-box;
+        margin: 10px 0;
+      }
+      #model-test-output {
+        white-space: pre-wrap;
+        line-height: 1.65;
+        margin-top: 15px;
+      }
+      .downloaded-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      #model-download-progress {
+        width: 100%;
+      }
+      @media (max-width: 700px) {
+        .model-layout {
+          grid-template-columns: 1fr;
+        }
+        #provider-list {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="tabs">
       <div class="tab-group">
-        <button class="tab active" onclick="switchTab('offline')">Offline Translation</button>
-        <button class="tab" onclick="switchTab('api-keys')">API Keys</button>
-        <button class="tab" onclick="switchTab('model')">Model</button>
+        <button class="tab active" onclick="switchTab('model')">Model</button>
         <button class="tab" onclick="switchTab('customization')">Customization</button>
         <button class="tab" onclick="switchTab('general')">General</button>
       </div>
@@ -258,183 +455,110 @@
     </div>
 
     <div class="content">
-      <div id="offline" class="tab-panel active">
-        <div class="container">
-          <h2>Translate on this Mac</h2>
-          <p>
-            Translate between English and Japanese without API keys or an account. Your text stays
-            on this Mac.
-          </p>
-          <div class="form-group">
-            <label>Hy-MT2 · 1.8B</label>
-            <div class="help-text">
-              One-time download: 1.13 GB. Works offline after setup. Requires an Apple Silicon Mac.
+      <div id="model" class="tab-panel active">
+        <div class="container model-container">
+          <div class="model-heading">
+            <div>
+              <h2>Model Settings</h2>
+              <p class="help-text">Choose where your translation runs, then fine-tune the model.</p>
             </div>
-            <div class="help-text">
-              Keeps the selected model in memory for faster translations. Switching to another model
-              releases it.
-            </div>
-            <p id="local-state" role="status" aria-live="polite">Checking model…</p>
-            <progress id="local-progress" max="100" value="0" style="width: 100%" hidden></progress>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px">
-              <button
-                class="save-btn"
-                id="local-install"
-                onclick="ipcRenderer.send('install-local-model')"
-                disabled
-              >
-                Download (1.13 GB)
-              </button>
-              <button
-                class="save-btn"
-                id="local-select"
-                onclick="ipcRenderer.send('select-local-model')"
-                disabled
-              >
-                Use this model
-              </button>
-              <button
-                class="reset-btn"
-                id="local-cancel"
-                onclick="ipcRenderer.send('cancel-local-download')"
-                hidden
-              >
-                Cancel
-              </button>
-              <button class="reset-btn" id="local-delete" onclick="deleteLocalModel()" disabled>
-                Delete model
-              </button>
-            </div>
-            <div class="help-text">
-              Use this model switches to English ↔ Japanese and popup display. Changes are saved
-              immediately.
-            </div>
-            <p id="local-error" role="alert" style="color: #bf3838"></p>
-            <div class="help-text" id="local-path" style="overflow-wrap: anywhere"></div>
-            <div class="help-text">
-              <a href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF" target="_blank"
-                >Model source</a
-              >
-              ·
-              <a
-                href="https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/blob/a0c709d9fac510f2c807aa3af52872340dc37a4a/LICENSE.txt"
-                target="_blank"
-                >Apache 2.0 license</a
-              >
-              applies to the downloaded model.
-            </div>
+            <span id="model-unsaved" hidden>Unsaved changes</span>
           </div>
-          <div class="form-group">
-            <label for="local-input">Try a translation</label>
-            <textarea
-              id="local-input"
-              rows="3"
-              maxlength="2000"
-              placeholder="Enter English or Japanese text"
-            >
+          <div class="current-model">
+            <span class="eyebrow">CURRENTLY USING</span><strong id="model-current">Loading…</strong>
+          </div>
+          <div class="model-layout">
+            <section class="provider-column">
+              <label id="provider-label">1 · Provider</label>
+              <div id="provider-list" role="group" aria-labelledby="provider-label"></div>
+            </section>
+            <section class="model-column">
+              <div class="connection-card">
+                <span class="eyebrow">CONNECTION</span>
+                <p id="connection-summary"></p>
+                <div id="chatgpt-connection" hidden>
+                  <button id="model-login" class="reset-btn">Sign in with ChatGPT</button>
+                  <button id="model-logout" class="reset-btn">Log out</button>
+                </div>
+                <details id="api-connection" hidden>
+                  <summary>Manage API key</summary>
+                  <label for="provider-api-key">API key</label
+                  ><input
+                    id="provider-api-key"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="Enter a new API key"
+                  />
+                  <p class="help-text">
+                    Stored keys are never displayed here. Saving a key does not verify it.
+                  </p>
+                  <button id="model-key-save" class="reset-btn">Save key</button>
+                  <button id="model-key-remove" class="reset-btn">Remove key</button>
+                </details>
+              </div>
+              <label for="model-choice">2 · Model</label
+              ><select id="model-choice" disabled></select>
+              <div id="custom-model-field" hidden>
+                <label for="manual-model-id">Model ID</label
+                ><input id="manual-model-id" placeholder="Enter the exact model ID" />
+                <p class="help-text">
+                  Options stay at the provider default when this model's capabilities are unknown.
+                </p>
+              </div>
+              <div id="model-description" class="help-text"></div>
+              <button id="model-refresh" class="text-button">Refresh model list</button>
+              <div id="local-model-setup" hidden>
+                <p id="model-download-status" role="status"></p>
+                <progress id="model-download-progress" max="100" value="0" hidden></progress>
+                <button id="model-download" class="save-btn">Download</button>
+                <button id="model-download-cancel" class="reset-btn" hidden>Cancel download</button>
+                <p class="help-text">
+                  <a id="model-source" target="_blank">Model source</a> ·
+                  <a id="model-license" target="_blank">License</a>
+                </p>
+                <details>
+                  <summary>Manage downloaded models</summary>
+                  <div id="model-downloads"></div>
+                </details>
+              </div>
+              <div id="model-options">
+                <label>3 · Model options</label>
+                <div id="effort-field">
+                  <label for="model-effort">Reasoning effort</label
+                  ><select id="model-effort"></select>
+                </div>
+                <div id="fast-field">
+                  <label class="fast-label"
+                    ><input id="model-fast" type="checkbox" /> Fast mode</label
+                  >
+                  <p id="model-fast-help" class="help-text"></p>
+                </div>
+                <p id="model-no-options" class="help-text" hidden>
+                  This model uses its default settings.
+                </p>
+              </div>
+            </section>
+          </div>
+          <div id="model-status" class="model-message" role="status" aria-live="polite"></div>
+          <div class="model-footer">
+            <span id="model-save-note">Changes apply when you save.</span
+            ><button id="model-discard" class="text-button" hidden>Discard changes</button>
+          </div>
+          <details class="model-test">
+            <summary>Try a translation before saving</summary>
+            <label for="model-test-input">English or Japanese text</label
+            ><textarea id="model-test-input" rows="3">
 The update will not delete your files.</textarea
-            >
-            <button class="save-btn" id="local-test" onclick="testLocalModel()" disabled>
-              Translate
-            </button>
-            <p id="local-test-meta" role="status"></p>
-            <div
-              id="local-result"
-              style="white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7"
-              aria-live="polite"
-            ></div>
-          </div>
-          <p class="help-text">
-            Up to 2,000 characters per translation. Text appears as it is generated. Custom prompts
-            and AI prompt generation are not supported. Review names, technical terms, and ambiguous
-            passages.
-          </p>
+            ><button id="model-test-button" class="reset-btn">Test translation</button
+            ><span id="model-test-meta" class="help-text"></span>
+            <div id="model-test-output" aria-live="polite"></div>
+            <p class="help-text">
+              Uses the selected draft model. Cloud providers receive this text and may charge for
+              the request.
+            </p>
+          </details>
         </div>
       </div>
-      <div id="api-keys" class="tab-panel">
-        <div class="container">
-          <h2>API Key Settings</h2>
-
-          <h3 style="margin-bottom: 10px; color: #444; font-size: 16px">ChatGPT/Codex</h3>
-          <div class="help-text" id="codex-account-status">
-            Sign in with ChatGPT to use your Codex subscription.
-          </div>
-          <div style="display: flex; gap: 10px; margin: 10px 0 24px">
-            <button class="save-btn" id="codex-login-btn" onclick="startCodexLogin()">
-              Sign in with ChatGPT
-            </button>
-            <button class="reset-btn" id="codex-logout-btn" onclick="logoutCodex()" disabled>
-              Log out
-            </button>
-          </div>
-
-          <hr style="border: none; border-top: 1px solid #eee; margin: 0 0 25px" />
-
-          <div class="form-group">
-            <label for="anthropic-key">Claude API Key</label>
-            <input type="password" id="anthropic-key" placeholder="sk-ant-api03-..." />
-            <div class="help-text">
-              Get your API key from
-              <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="openai-key">OpenAI API Key</label>
-            <input type="password" id="openai-key" placeholder="sk-..." />
-            <div class="help-text">
-              Get your API key from
-              <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="google-key">Google AI API Key</label>
-            <input type="password" id="google-key" placeholder="AIzaSy..." />
-            <div class="help-text">
-              Get your API key from
-              <a href="https://makersuite.google.com/app/apikey" target="_blank"
-                >makersuite.google.com</a
-              >
-            </div>
-          </div>
-
-          <div class="status" id="api-status"></div>
-        </div>
-      </div>
-
-      <div id="model" class="tab-panel">
-        <div class="container">
-          <h2>Model Settings</h2>
-
-          <div class="form-group">
-            <label for="openai-reasoning-effort">Reasoning effort</label>
-            <div class="help-text" id="selected-model-name"></div>
-            <select id="openai-reasoning-effort" disabled>
-              <option value="">Use the model default</option>
-            </select>
-            <div class="help-text" id="openai-reasoning-effort-help">
-              The selected model's available values are shown here. The model default is used when
-              no effort is selected.
-            </div>
-          </div>
-
-          <div class="checkbox-group">
-            <input type="checkbox" id="openai-fast-mode" disabled />
-            <label for="openai-fast-mode" class="checkbox-label">Use Fast mode</label>
-          </div>
-          <div
-            class="help-text"
-            id="openai-fast-mode-help"
-            style="margin-top: -15px; margin-left: 28px"
-          >
-            Uses the selected model's faster service tier when available.
-          </div>
-
-          <div class="status" id="model-status"></div>
-        </div>
-      </div>
-
       <div id="customization" class="tab-panel">
         <div class="container">
           <h2>Customization</h2>
@@ -458,32 +582,6 @@ For example:
             <button class="generate-btn" id="generate-prompt-btn" onclick="openGenerateModal()">
               Generate with AI
             </button>
-          </div>
-
-          <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0" />
-
-          <h3 style="margin-top: 0; margin-bottom: 15px; color: #444; font-size: 16px">
-            Custom Model
-          </h3>
-          <div class="form-group">
-            <label for="custom-model-name">Model Name</label>
-            <input
-              type="text"
-              id="custom-model-name"
-              placeholder="gpt-4-1106-preview, claude-3-opus-20240229, etc."
-            />
-            <div class="help-text">Enter the exact model ID/name from your provider</div>
-          </div>
-
-          <div class="form-group">
-            <label for="custom-model-provider">Provider</label>
-            <select id="custom-model-provider">
-              <option value="">Select a provider</option>
-              <option value="anthropic">Claude</option>
-              <option value="openai">OpenAI</option>
-              <option value="google">Google AI</option>
-            </select>
-            <div class="help-text">Select which API provider to use for this model</div>
           </div>
 
           <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0" />
@@ -617,82 +715,12 @@ For example:
       const ipcRenderer = window.honyoSettings;
 
       let pendingChanges = {
-        apiKeys: false,
         customPrompt: false,
-        customModel: false,
-        reasoningEffort: false,
-        fastMode: false,
         customLanguages: false,
         display: false,
       };
 
       ipcRenderer.on('settings-tab', (_event, tab) => switchTab(tab));
-      let localWasSelected;
-      ipcRenderer.on('local-model-state', (_event, state) => {
-        if (localWasSelected !== state.selected) {
-          localWasSelected = state.selected;
-          ipcRenderer.send('load-openai-reasoning-effort');
-        }
-        const downloading = state.phase === 'downloading' || state.phase === 'verifying';
-        const percent = Math.min(100, Math.round((state.bytes / state.total) * 100));
-        const labels = {
-          downloading: `Downloading ${percent}%`,
-          verifying: 'Verifying model…',
-          loading: 'Loading into memory…',
-          translating: 'Translating…',
-        };
-        document.getElementById('local-state').textContent = !state.supported
-          ? 'Available on Apple Silicon Macs.'
-          : labels[state.phase] ||
-            (state.installed
-              ? state.selected
-                ? 'Selected · Ready for offline translation'
-                : 'Downloaded · Ready to select'
-              : 'Download the model to get started');
-        document.getElementById('local-progress').hidden = !downloading;
-        document.getElementById('local-progress').value = percent;
-        document.getElementById('local-install').hidden = state.installed;
-        document.getElementById('local-install').disabled = !state.supported || state.busy;
-        document.getElementById('local-select').disabled =
-          !state.supported || !state.installed || state.busy || state.selected;
-        document.getElementById('local-select').textContent = state.selected
-          ? 'Selected'
-          : 'Use this model';
-        document.getElementById('local-cancel').hidden = !downloading;
-        document.getElementById('local-delete').disabled = !state.installed || state.busy;
-        document.getElementById('local-test').disabled =
-          !state.supported || !state.installed || state.busy;
-        document.getElementById('local-path').textContent = `Storage: ${state.path}`;
-        if (state.error) document.getElementById('local-error').textContent = state.error;
-        document.getElementById('generate-prompt-btn').disabled = state.selected;
-      });
-      ipcRenderer.on('local-model-error', (_event, error) => {
-        document.getElementById('local-error').textContent = error;
-      });
-      function deleteLocalModel() {
-        if (
-          confirm(
-            'Delete the downloaded model (1.13 GB)? You will need to download it again to use offline translation.',
-          )
-        )
-          ipcRenderer.send('delete-local-model');
-      }
-      function testLocalModel() {
-        document.getElementById('local-test-meta').textContent = 'Translating…';
-        document.getElementById('local-result').textContent = '';
-        document.getElementById('local-error').textContent = '';
-        ipcRenderer.send('test-local-model', document.getElementById('local-input').value);
-      }
-      ipcRenderer.on('local-test-chunk', (_event, chunk) => {
-        document.getElementById('local-result').textContent = chunk;
-      });
-      ipcRenderer.on('local-test-result', (_event, result) => {
-        document.getElementById('local-test-meta').textContent =
-          result.error ||
-          `${result.sourceLanguage} → ${result.targetLanguage} · ${result.seconds.toFixed(1)} s`;
-        document.getElementById('local-result').textContent = result.translation || '';
-      });
-
       // Tab switching
       function switchTab(tabName) {
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -704,42 +732,19 @@ For example:
 
       // Load data on startup
       window.addEventListener('DOMContentLoaded', () => {
-        ipcRenderer.send('load-local-model');
-        if (location.hash === '#offline') switchTab('offline');
-        ipcRenderer.send('load-codex-account');
-        ipcRenderer.send('load-api-keys');
+        if (location.hash)
+          switchTab(
+            ['#offline', '#api-keys'].includes(location.hash) ? 'model' : location.hash.slice(1),
+          );
         ipcRenderer.send('load-custom-prompt');
-        ipcRenderer.send('load-custom-model');
-        ipcRenderer.send('load-openai-reasoning-effort');
         ipcRenderer.send('load-custom-languages');
         ipcRenderer.send('load-auto-close-on-blur');
         ipcRenderer.send('load-open-at-login');
 
         // Add change listeners
         document
-          .getElementById('anthropic-key')
-          .addEventListener('input', () => (pendingChanges.apiKeys = true));
-        document
-          .getElementById('openai-key')
-          .addEventListener('input', () => (pendingChanges.apiKeys = true));
-        document
-          .getElementById('google-key')
-          .addEventListener('input', () => (pendingChanges.apiKeys = true));
-        document
           .getElementById('custom-prompt-input')
           .addEventListener('input', () => (pendingChanges.customPrompt = true));
-        document
-          .getElementById('custom-model-name')
-          .addEventListener('input', () => (pendingChanges.customModel = true));
-        document
-          .getElementById('custom-model-provider')
-          .addEventListener('change', () => (pendingChanges.customModel = true));
-        document
-          .getElementById('openai-reasoning-effort')
-          .addEventListener('change', () => (pendingChanges.reasoningEffort = true));
-        document
-          .getElementById('openai-fast-mode')
-          .addEventListener('change', () => (pendingChanges.fastMode = true));
         document
           .getElementById('custom-languages-input')
           .addEventListener('input', () => (pendingChanges.customLanguages = true));
@@ -763,80 +768,6 @@ For example:
           .addEventListener('change', () => saveOpenAtLogin());
       });
 
-      // API Keys functionality
-      function updateCodexAccount(state) {
-        const status = document.getElementById('codex-account-status');
-        const login = document.getElementById('codex-login-btn');
-        const logout = document.getElementById('codex-logout-btn');
-        const account = state.account;
-
-        if (state.status === 'connected' && account) {
-          const identity = account.email || 'ChatGPT account';
-          const plan = account.planType ? ` (${account.planType})` : '';
-          status.textContent = `Connected as ${identity}${plan}. Models are available in the tray menu.`;
-          login.disabled = false;
-          login.textContent = 'Reconnect ChatGPT';
-          logout.disabled = false;
-          return;
-        }
-
-        if (state.status === 'connecting') {
-          status.textContent =
-            'Complete sign-in in your browser. This window updates automatically.';
-          login.disabled = true;
-          login.textContent = 'Opening browser...';
-          logout.disabled = true;
-          return;
-        }
-
-        status.textContent = state.error || 'Sign in with ChatGPT to use your Codex subscription.';
-        login.disabled = false;
-        login.textContent = 'Sign in with ChatGPT';
-        logout.disabled = true;
-      }
-
-      function startCodexLogin() {
-        ipcRenderer.send('start-codex-login');
-      }
-
-      function logoutCodex() {
-        ipcRenderer.send('logout-codex');
-      }
-
-      ipcRenderer.on('codex-account-loaded', (event, state) => updateCodexAccount(state));
-      ipcRenderer.on('codex-account-changed', (event, state) => updateCodexAccount(state));
-      ipcRenderer.on('codex-login-started', (event, result) => {
-        if (!result.success) updateCodexAccount({ status: 'disconnected', error: result.error });
-      });
-      ipcRenderer.on('codex-logout-completed', (event, result) => {
-        if (!result.success) updateCodexAccount({ status: 'disconnected', error: result.error });
-      });
-
-      ipcRenderer.on('api-keys-loaded', (event, keys) => {
-        if (keys.anthropic) document.getElementById('anthropic-key').value = keys.anthropic;
-        if (keys.openai) document.getElementById('openai-key').value = keys.openai;
-        if (keys.google) document.getElementById('google-key').value = keys.google;
-      });
-
-      function saveApiKeys() {
-        const keys = {
-          anthropic: document.getElementById('anthropic-key').value.trim(),
-          openai: document.getElementById('openai-key').value.trim(),
-          google: document.getElementById('google-key').value.trim(),
-        };
-
-        ipcRenderer.send('save-api-keys', keys);
-      }
-
-      ipcRenderer.on('api-keys-saved', (event, success) => {
-        if (success) {
-          pendingChanges.apiKeys = false;
-          showStatus('API keys saved successfully!', false);
-        } else {
-          showStatus('Failed to save API keys. Please try again.', true);
-        }
-      });
-
       // Custom Prompt functionality
       ipcRenderer.on('custom-prompt-loaded', (event, customPrompt) => {
         document.getElementById('custom-prompt-input').value = customPrompt || '';
@@ -853,99 +784,6 @@ For example:
           showStatus('Custom prompt saved successfully!', false);
         } else {
           showStatus('Failed to save custom prompt. Please try again.', true);
-        }
-      });
-
-      // Custom Model functionality
-      ipcRenderer.on('custom-model-loaded', (event, customModel) => {
-        if (customModel) {
-          document.getElementById('custom-model-name').value = customModel.model || '';
-          document.getElementById('custom-model-provider').value = customModel.provider || '';
-        }
-      });
-
-      function saveCustomModel() {
-        const customModel = {
-          model: document.getElementById('custom-model-name').value.trim(),
-          provider: document.getElementById('custom-model-provider').value,
-        };
-        ipcRenderer.send('save-custom-model', customModel);
-      }
-
-      ipcRenderer.on('custom-model-saved', (event, success) => {
-        if (success) {
-          pendingChanges.customModel = false;
-          showStatus('Custom model saved successfully!', false);
-        } else {
-          showStatus('Failed to save custom model. Please try again.', true);
-        }
-      });
-
-      function reasoningEffortLabel(effort) {
-        const labels = {
-          none: 'None — lowest latency',
-          low: 'Low — faster responses',
-          medium: 'Medium — balanced',
-          high: 'High — more reasoning',
-          xhigh: 'Extra high — more reasoning',
-          max: 'Max — quality first',
-          ultra: 'Ultra — maximum reasoning',
-        };
-        return labels[effort] || effort;
-      }
-
-      ipcRenderer.on('openai-reasoning-effort-loaded', (event, settings) => {
-        const select = document.getElementById('openai-reasoning-effort');
-        const modelName = document.getElementById('selected-model-name');
-        const help = document.getElementById('openai-reasoning-effort-help');
-        const fastMode = document.getElementById('openai-fast-mode');
-        const fastHelp = document.getElementById('openai-fast-mode-help');
-        modelName.textContent = `Selected model: ${settings.modelName}`;
-        select.replaceChildren(new Option('Use the model default', ''));
-        for (const option of settings.reasoningEffortOptions) {
-          const label = option.description
-            ? `${reasoningEffortLabel(option.reasoningEffort)} — ${option.description}`
-            : reasoningEffortLabel(option.reasoningEffort);
-          select.add(new Option(label, option.reasoningEffort));
-        }
-        const supported = settings.reasoningEffortOptions.length > 0;
-        select.disabled = !supported;
-        select.value = settings.effort || '';
-        fastMode.disabled = !settings.fastModeServiceTier;
-        fastMode.checked = Boolean(settings.fastMode);
-        help.textContent = supported
-          ? "The selected model's available values are shown here. The model default is used when no effort is selected."
-          : 'The selected model does not expose configurable reasoning effort.';
-        fastHelp.textContent = settings.fastModeServiceTier
-          ? `Uses ${settings.fastModeServiceTier.name}${settings.fastModeServiceTier.description ? `: ${settings.fastModeServiceTier.description}` : ''}.`
-          : 'The selected model does not expose a faster service tier.';
-      });
-
-      function saveOpenAIReasoningEffort() {
-        const effort = document.getElementById('openai-reasoning-effort').value || null;
-        ipcRenderer.send('save-openai-reasoning-effort', effort);
-      }
-
-      function saveOpenAIFastMode() {
-        const enabled = document.getElementById('openai-fast-mode').checked;
-        ipcRenderer.send('save-openai-fast-mode', enabled);
-      }
-
-      ipcRenderer.on('openai-reasoning-effort-saved', (event, success) => {
-        if (success) {
-          pendingChanges.reasoningEffort = false;
-          showStatus('Reasoning effort saved successfully!', false);
-        } else {
-          showStatus('Failed to save reasoning effort. Please try again.', true);
-        }
-      });
-
-      ipcRenderer.on('openai-fast-mode-saved', (event, success) => {
-        if (success) {
-          pendingChanges.fastMode = false;
-          showStatus('Fast mode setting saved successfully!', false);
-        } else {
-          showStatus('Failed to save Fast mode setting. Please try again.', true);
         }
       });
 
@@ -1058,24 +896,17 @@ For example:
       });
 
       // Save all function
-      function saveAll() {
+      async function saveAll() {
+        const modelChanged = window.modelSettings.isDirty();
         const saveBtn = document.getElementById('save-all-btn');
         saveBtn.disabled = true;
-
-        if (pendingChanges.apiKeys) {
-          saveApiKeys();
+        if (!(await window.modelSettings.save())) {
+          saveBtn.disabled = false;
+          return;
         }
+
         if (pendingChanges.customPrompt) {
           saveCustomPrompt();
-        }
-        if (pendingChanges.customModel) {
-          saveCustomModel();
-        }
-        if (pendingChanges.reasoningEffort) {
-          saveOpenAIReasoningEffort();
-        }
-        if (pendingChanges.fastMode) {
-          saveOpenAIFastMode();
         }
         if (pendingChanges.customLanguages) {
           saveCustomLanguages();
@@ -1085,11 +916,8 @@ For example:
         }
 
         if (
-          !pendingChanges.apiKeys &&
+          !modelChanged &&
           !pendingChanges.customPrompt &&
-          !pendingChanges.customModel &&
-          !pendingChanges.reasoningEffort &&
-          !pendingChanges.fastMode &&
           !pendingChanges.customLanguages &&
           !pendingChanges.display
         ) {
@@ -1169,5 +997,6 @@ For example:
         }
       }
     </script>
+    <script src="build/ui/model-settings-renderer.js"></script>
   </body>
 </html>

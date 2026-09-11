@@ -4,9 +4,7 @@ import {
   type CodexNotification,
   type CodexTurnOptions,
 } from './app-server.ts';
-import { DEFAULT_AI_MODEL } from '../models.ts';
-import { getConfig, updateConfig } from '../config/index.ts';
-import { getCodexModelId, toCodexModels } from './models.ts';
+import { toCodexModels } from './models.ts';
 import { setCodexModels } from '../models-remote.ts';
 
 export interface CodexConnectionState {
@@ -23,10 +21,6 @@ let initialization: Promise<void> | null = null;
 
 function setCatalog(models: ReturnType<typeof toCodexModels>): void {
   setCodexModels(models);
-  const selectedModel = getCodexModelId(getConfig().aiModel);
-  if (selectedModel && !models[`codex:${selectedModel}`]) {
-    updateConfig({ aiModel: DEFAULT_AI_MODEL });
-  }
 }
 
 function publish(next: CodexConnectionState): void {

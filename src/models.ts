@@ -12,6 +12,7 @@ export interface ModelServiceTier {
 }
 
 export interface AIModelInfo {
+  optionsKnown?: boolean;
   name: string;
   provider: AIProvider;
   model: string;

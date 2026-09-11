@@ -4,7 +4,7 @@ import {
   type ModelServiceTier,
   type ReasoningEffortOption,
 } from './models.ts';
-import { getModelInfo } from './models-remote.ts';
+import { getModelInfo, getAvailableModels } from './models-remote.ts';
 import {
   OPENAI_REASONING_EFFORTS,
   type Config,
@@ -14,7 +14,13 @@ import {
 export function getSelectedModelInfo(config: Config): AIModelInfo | undefined {
   if (config.aiModel === CUSTOM_MODEL_ID) {
     if (!config.customModel?.model || !config.customModel.provider) return undefined;
+    const known = Object.values(getAvailableModels()).find(
+      model =>
+        model.provider === config.customModel?.provider && model.model === config.customModel.model,
+    );
+    if (known) return known;
     return {
+      optionsKnown: false,
       name: config.customModel.model,
       model: config.customModel.model,
       provider: config.customModel.provider,
@@ -25,12 +31,16 @@ export function getSelectedModelInfo(config: Config): AIModelInfo | undefined {
 }
 
 export function supportsOpenAIReasoningEffort(modelInfo: AIModelInfo | undefined): boolean {
-  if (modelInfo?.provider !== 'openai') return false;
+  if (modelInfo?.provider !== 'openai' || modelInfo.optionsKnown === false) return false;
   return /^(gpt-5|o[1-9])(?:[.-]|$)/.test(modelInfo.model);
 }
 
 export function supportsOpenAIFastMode(modelInfo: AIModelInfo | undefined): boolean {
-  return modelInfo?.provider === 'openai' && /^gpt-5\.6(?:[.-]|$)/.test(modelInfo.model);
+  return (
+    modelInfo?.optionsKnown !== false &&
+    modelInfo?.provider === 'openai' &&
+    /^gpt-5\.6(?:[.-]|$)/.test(modelInfo.model)
+  );
 }
 
 export function getReasoningEffortOptions(

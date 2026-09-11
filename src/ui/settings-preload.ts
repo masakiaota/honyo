@@ -1,24 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const sendChannels = new Set([
-  'load-local-model',
-  'install-local-model',
-  'cancel-local-download',
-  'delete-local-model',
-  'select-local-model',
-  'test-local-model',
-  'load-codex-account',
-  'start-codex-login',
-  'logout-codex',
-  'load-api-keys',
-  'save-api-keys',
   'load-custom-prompt',
   'save-custom-prompt',
-  'load-custom-model',
-  'save-custom-model',
-  'load-openai-reasoning-effort',
-  'save-openai-reasoning-effort',
-  'save-openai-fast-mode',
   'load-custom-languages',
   'save-custom-languages',
   'load-auto-close-on-blur',
@@ -31,24 +15,11 @@ const sendChannels = new Set([
 ]);
 
 const receiveChannels = new Set([
-  'local-model-state',
-  'local-model-error',
-  'local-test-result',
-  'local-test-chunk',
+  'model-settings-state',
+  'model-settings-chunk',
   'settings-tab',
-  'codex-account-loaded',
-  'codex-account-changed',
-  'codex-login-started',
-  'codex-logout-completed',
-  'api-keys-loaded',
-  'api-keys-saved',
   'custom-prompt-loaded',
   'custom-prompt-saved',
-  'custom-model-loaded',
-  'custom-model-saved',
-  'openai-reasoning-effort-loaded',
-  'openai-reasoning-effort-saved',
-  'openai-fast-mode-saved',
   'custom-languages-loaded',
   'custom-languages-saved',
   'auto-close-on-blur-loaded',
@@ -65,6 +36,9 @@ const receiveChannels = new Set([
 ]);
 
 contextBridge.exposeInMainWorld('honyoSettings', {
+  model(request: unknown): Promise<unknown> {
+    return ipcRenderer.invoke('model-settings', request);
+  },
   send(channel: string, ...args: unknown[]): void {
     if (sendChannels.has(channel)) {
       ipcRenderer.send(channel, ...args);

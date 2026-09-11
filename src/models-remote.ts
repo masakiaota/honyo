@@ -1,4 +1,4 @@
-import { LOCAL_MODEL, LOCAL_MODEL_ID } from './local/model.ts';
+import { LOCAL_MODELS } from './local/model.ts';
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -50,7 +50,7 @@ export function setCodexModels(models: Record<string, AIModelInfo>): void {
   const previous = JSON.stringify(codexModels);
   const next = JSON.stringify(models);
   codexModels = models;
-  if (previous !== next) onModelsChanged?.();
+  if (previous !== next) notifyModelsChanged();
 }
 
 export function loadModelsCache(): void {
@@ -269,13 +269,12 @@ export function getAvailableModels(): Record<string, AIModelInfo> {
     ...buildAvailableModels(cache),
     ...codexModels,
     ...(process.platform === 'darwin' && process.arch === 'arm64'
-      ? {
-          [LOCAL_MODEL_ID]: {
-            name: LOCAL_MODEL.name,
-            provider: 'local' as const,
-            model: LOCAL_MODEL_ID,
-          },
-        }
+      ? Object.fromEntries(
+          Object.entries(LOCAL_MODELS).map(([id, spec]) => [
+            id,
+            { name: spec.name, provider: 'local' as const, model: id },
+          ]),
+        )
       : {}),
   };
 
@@ -331,13 +330,14 @@ function pinSelectedModel(models: Partial<Record<Provider, AIModelInfo[]>>): voi
  * true if the list changed, in which case the registered callback fires so the
  * tray menu can rebuild.
  */
-export async function refreshModels(): Promise<boolean> {
+export async function refreshModels(force = false): Promise<boolean> {
   if (!cacheLoaded) loadModelsCache();
   if (refreshInFlight) return false;
   refreshInFlight = true;
 
   try {
     if (
+      !force &&
       cache &&
       Date.now() - cache.fetchedAt < CACHE_TTL_MS &&
       Object.keys(cache.models).length > 0
@@ -369,9 +369,19 @@ export async function refreshModels(): Promise<boolean> {
     saveModelsCache();
 
     const changed = prev !== next;
-    if (changed) onModelsChanged?.();
+    if (changed) notifyModelsChanged();
     return changed;
   } finally {
     refreshInFlight = false;
   }
+}
+
+const modelListeners = new Set<() => void>();
+export function subscribeModels(listener: () => void): () => void {
+  modelListeners.add(listener);
+  return () => modelListeners.delete(listener);
+}
+function notifyModelsChanged(): void {
+  onModelsChanged?.();
+  for (const listener of modelListeners) listener();
 }

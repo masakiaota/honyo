@@ -1,52 +1,23 @@
-import { LOCAL_MODEL_ID } from '../local/model.ts';
-import {
-  localState,
-  releaseLocal,
-  warmLocal,
-  subscribeLocal,
-  installLocal,
-  cancelLocalDownload,
-  deleteLocal,
-  translateLocal,
-} from '../local/index.ts';
-import { getTray } from './tray.ts';
-import { createTrayMenu } from './menu.ts';
+import { isLocalModel } from '../local/model.ts';
+import { setupModelSettingsIPC } from './model-settings.ts';
 import { BrowserWindow, ipcMain, app, shell, type IpcMainEvent } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { generateText } from 'ai';
 import {
   getApiKeys,
-  updateApiKeys,
   getConfig,
   updateConfig,
   clearPopupSize,
-  type ApiKeys,
   type Config,
-  type CustomModel,
-  type OpenAIReasoningEffort,
 } from '../config/index.ts';
 import { resetPopupSize } from './popup.ts';
 import { getAIProvider } from '../translation/providers.ts';
 import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
 import { isValidMaxInputCharacters } from '../input-character-limit.ts';
-import {
-  getCodexTurnOptions,
-  getFastModeServiceTier,
-  getReasoningEffortOptions,
-  getSelectedReasoningEffort,
-  getOpenAIProviderOptions,
-  getSelectedModelInfo,
-  isFastModeEnabled,
-} from '../reasoning-effort.ts';
-import {
-  getCodexConnectionState,
-  logoutCodex,
-  runCodexText,
-  startCodexLogin,
-  subscribeCodexConnection,
-} from '../codex/index.ts';
+import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
+import { runCodexText } from '../codex/index.ts';
 import { getCodexModelId } from '../codex/models.ts';
 
 // Get __dirname in both ESM and CommonJS
@@ -70,7 +41,6 @@ const allowedExternalHosts = new Set([
 ]);
 
 let settingsWindow: BrowserWindow | null = null;
-let codexSubscriptionInstalled = false;
 
 function getPreloadPath(): string {
   return app.isPackaged
@@ -91,7 +61,8 @@ function isSettingsEvent(event: IpcMainEvent): boolean {
   return event.sender === settingsWindow?.webContents;
 }
 
-export function openSettingsWindow(tab?: string): void {
+export function openSettingsWindow(tab = 'model'): void {
+  if (tab === 'offline' || tab === 'api-keys') tab = 'model';
   if (settingsWindow) {
     settingsWindow.focus();
     if (tab) settingsWindow.webContents.send('settings-tab', tab);
@@ -99,8 +70,8 @@ export function openSettingsWindow(tab?: string): void {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 940,
+    height: 780,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -140,123 +111,7 @@ export function openSettingsWindow(tab?: string): void {
 }
 
 export function setupSettingsIPC(): void {
-  const sendLocal = (): void => {
-    settingsWindow?.webContents.send('local-model-state', {
-      ...localState(),
-      selected: getConfig().aiModel === LOCAL_MODEL_ID,
-    });
-  };
-  subscribeLocal(sendLocal);
-  ipcMain.on('load-local-model', event => {
-    if (isSettingsEvent(event)) sendLocal();
-  });
-  const localAction = (channel: string, action: () => Promise<void>): void => {
-    ipcMain.on(channel, event => {
-      if (!isSettingsEvent(event)) return;
-      settingsWindow?.webContents.send('local-model-error', '');
-      void action()
-        .catch(cause => {
-          settingsWindow?.webContents.send(
-            'local-model-error',
-            cause instanceof Error ? cause.message : String(cause),
-          );
-        })
-        .finally(sendLocal);
-    });
-  };
-  localAction('install-local-model', installLocal);
-  localAction('delete-local-model', deleteLocal);
-  ipcMain.on('cancel-local-download', event => {
-    if (isSettingsEvent(event)) cancelLocalDownload();
-  });
-  localAction('select-local-model', async () => {
-    if (!localState().supported || !localState().installed || localState().busy)
-      throw new Error('Wait for model setup to finish before selecting it.');
-    await warmLocal();
-    if (localState().error) throw new Error(localState().error);
-    updateConfig({
-      aiModel: LOCAL_MODEL_ID,
-      targetLanguage: 'Japanese',
-      secondaryLanguage: 'English',
-      displayMode: 'popup',
-    });
-    const tray = getTray();
-    tray?.setContextMenu(createTrayMenu(tray, () => undefined));
-  });
-  ipcMain.on('test-local-model', (event, text: unknown) => {
-    if (!isSettingsEvent(event) || typeof text !== 'string') return;
-    const started = Date.now();
-    void translateLocal(text, 'Japanese', 'English', undefined, chunk => {
-      if (!event.sender.isDestroyed()) event.reply('local-test-chunk', chunk);
-    })
-      .then(result => {
-        if (!event.sender.isDestroyed())
-          event.reply('local-test-result', { ...result, seconds: (Date.now() - started) / 1000 });
-      })
-      .catch(cause => {
-        if (!event.sender.isDestroyed())
-          event.reply('local-test-result', {
-            error: cause instanceof Error ? cause.message : String(cause),
-          });
-      })
-      .finally(() => {
-        if (getConfig().aiModel !== LOCAL_MODEL_ID) releaseLocal();
-      });
-  });
-
-  if (!codexSubscriptionInstalled) {
-    subscribeCodexConnection(state => {
-      if (
-        !settingsWindow ||
-        settingsWindow.isDestroyed() ||
-        settingsWindow.webContents.isDestroyed()
-      ) {
-        return;
-      }
-      settingsWindow.webContents.send('codex-account-changed', state);
-    });
-    codexSubscriptionInstalled = true;
-  }
-
-  ipcMain.on('load-codex-account', event => {
-    if (!isSettingsEvent(event)) return;
-    event.reply('codex-account-loaded', getCodexConnectionState());
-  });
-
-  ipcMain.on('start-codex-login', event => {
-    if (!isSettingsEvent(event)) return;
-    void startCodexLogin()
-      .then(() => event.reply('codex-login-started', { success: true }))
-      .catch(error =>
-        event.reply('codex-login-started', {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to start ChatGPT login',
-        }),
-      );
-  });
-
-  ipcMain.on('logout-codex', event => {
-    if (!isSettingsEvent(event)) return;
-    void logoutCodex()
-      .then(() => event.reply('codex-logout-completed', { success: true }))
-      .catch(error =>
-        event.reply('codex-logout-completed', {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to log out',
-        }),
-      );
-  });
-
-  ipcMain.on('load-api-keys', event => {
-    if (!isSettingsEvent(event)) return;
-    event.reply('api-keys-loaded', getApiKeys());
-  });
-
-  ipcMain.on('save-api-keys', (event, keys: Partial<ApiKeys>) => {
-    if (!isSettingsEvent(event)) return;
-    updateApiKeys(keys);
-    event.reply('api-keys-saved', true);
-  });
+  setupModelSettingsIPC(() => settingsWindow);
 
   ipcMain.on('load-custom-prompt', event => {
     if (!isSettingsEvent(event)) return;
@@ -268,95 +123,6 @@ export function setupSettingsIPC(): void {
     if (!isSettingsEvent(event)) return;
     updateConfig({ customPrompt });
     event.reply('custom-prompt-saved', true);
-  });
-
-  ipcMain.on('load-custom-model', event => {
-    if (!isSettingsEvent(event)) return;
-    const config = getConfig();
-    event.reply('custom-model-loaded', config.customModel);
-  });
-
-  ipcMain.on('save-custom-model', (event, customModel: CustomModel) => {
-    if (!isSettingsEvent(event)) return;
-    updateConfig({ customModel });
-    event.reply('custom-model-saved', true);
-  });
-
-  ipcMain.on('load-openai-reasoning-effort', event => {
-    if (!isSettingsEvent(event)) return;
-    const config = getConfig();
-    const modelInfo = getSelectedModelInfo(config);
-    const reasoningEffortOptions = getReasoningEffortOptions(modelInfo);
-    const fastModeServiceTier = getFastModeServiceTier(modelInfo);
-    event.reply('openai-reasoning-effort-loaded', {
-      modelName: modelInfo?.name ?? 'Unknown model',
-      reasoningEffortOptions,
-      effort: getSelectedReasoningEffort(config),
-      fastModeServiceTier,
-      fastMode: isFastModeEnabled(config),
-    });
-  });
-
-  ipcMain.on('save-openai-fast-mode', (event, enabled: boolean) => {
-    if (!isSettingsEvent(event)) return;
-    if (typeof enabled !== 'boolean') {
-      event.reply('openai-fast-mode-saved', false);
-      return;
-    }
-
-    const config = getConfig();
-    const modelInfo = getSelectedModelInfo(config);
-    if (!modelInfo || !getFastModeServiceTier(modelInfo)) {
-      event.reply('openai-fast-mode-saved', false);
-      return;
-    }
-
-    const fastModels = new Set(
-      modelInfo.provider === 'codex' ? config.codexFastModels : config.openaiFastModels,
-    );
-    if (enabled) {
-      fastModels.add(modelInfo.model);
-    } else {
-      fastModels.delete(modelInfo.model);
-    }
-    updateConfig(
-      modelInfo.provider === 'codex'
-        ? { codexFastModels: [...fastModels] }
-        : { openaiFastModels: [...fastModels] },
-    );
-    event.reply('openai-fast-mode-saved', true);
-  });
-
-  ipcMain.on('save-openai-reasoning-effort', (event, effort: string | null) => {
-    if (!isSettingsEvent(event)) return;
-    const config = getConfig();
-    const modelInfo = getSelectedModelInfo(config);
-    const reasoningEffortOptions = getReasoningEffortOptions(modelInfo);
-    if (
-      !modelInfo ||
-      reasoningEffortOptions.length === 0 ||
-      (effort !== null && !reasoningEffortOptions.some(option => option.reasoningEffort === effort))
-    ) {
-      event.reply('openai-reasoning-effort-saved', false);
-      return;
-    }
-
-    const efforts = {
-      ...(modelInfo.provider === 'codex'
-        ? config.codexReasoningEfforts
-        : config.openaiReasoningEfforts),
-    };
-    if (effort === null) {
-      delete efforts[modelInfo.model];
-    } else {
-      efforts[modelInfo.model] = effort;
-    }
-    updateConfig(
-      modelInfo.provider === 'codex'
-        ? { codexReasoningEfforts: efforts }
-        : { openaiReasoningEfforts: efforts as Partial<Record<string, OpenAIReasoningEffort>> },
-    );
-    event.reply('openai-reasoning-effort-saved', true);
   });
 
   ipcMain.on('load-custom-languages', event => {
@@ -446,7 +212,7 @@ export function setupSettingsIPC(): void {
       void (async (): Promise<void> => {
         try {
           const config = getConfig();
-          if (config.aiModel === LOCAL_MODEL_ID)
+          if (isLocalModel(config.aiModel))
             throw new Error('The offline model only supports translation, not prompt generation.');
           const apiKeys = getApiKeys();
           const modelInfo =

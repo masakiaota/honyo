@@ -3,23 +3,31 @@ import { app } from 'electron';
 import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { LOCAL_MODEL } from './model.ts';
+import { getLocalModel, LOCAL_MODEL_ID } from './model.ts';
 import { downloadModel, verifyModel } from './download.ts';
 import { LocalEngine } from './engine.ts';
 
 export const localSupported = process.platform === 'darwin' && process.arch === 'arm64';
 const directory = (): string => join(app.getPath('userData'), 'models');
-const modelPath = (): string => join(directory(), LOCAL_MODEL.file);
+const modelPath = (id: string): string => join(directory(), getLocalModel(id).file);
 let controller: AbortController | undefined;
 let engine: LocalEngine | undefined;
-let verified = false;
+let engineId: string | undefined;
+const verified = new Set<string>();
 let working = false;
-let phase = 'idle';
-let bytes = 0;
-let error = '';
+let releaseVersion = 0;
+const progress = new Map<string, { phase: string; bytes: number; error: string }>();
 const listeners = new Set<() => void>();
-
+function status(id: string): { phase: string; bytes: number; error: string } {
+  getLocalModel(id);
+  const existing = progress.get(id);
+  if (existing) return existing;
+  const state = { phase: 'idle', bytes: 0, error: '' };
+  progress.set(id, state);
+  return state;
+}
 export interface LocalState {
+  id: string;
   supported: boolean;
   installed: boolean;
   phase: string;
@@ -29,20 +37,20 @@ export interface LocalState {
   path: string;
   busy: boolean;
 }
-export function localState(): LocalState {
+export function localState(id = LOCAL_MODEL_ID): LocalState {
+  const model = getLocalModel(id);
   let installed = false;
   try {
-    installed = existsSync(modelPath()) && statSync(modelPath()).size === LOCAL_MODEL.bytes;
+    installed = existsSync(modelPath(id)) && statSync(modelPath(id)).size === model.bytes;
   } catch {
     /* missing */
   }
   return {
+    id,
     supported: localSupported,
     installed,
-    phase,
-    bytes,
-    total: LOCAL_MODEL.bytes,
-    error,
+    ...status(id),
+    total: model.bytes,
     path: directory(),
     busy: working || !!controller,
   };
@@ -54,30 +62,56 @@ export function subscribeLocal(listener: () => void): () => void {
 function emit(): void {
   for (const listener of listeners) listener();
 }
-
-export async function installLocal(): Promise<void> {
+function assertAvailable(): void {
   if (!localSupported) throw new Error('Offline translation requires an Apple Silicon Mac.');
-  if (working || controller) throw new Error('The model is busy. Please wait and try again.');
+  if (working || controller)
+    throw new Error('The offline model is busy. Please wait and try again.');
+}
+async function getEngine(id: string, signal?: AbortSignal): Promise<LocalEngine> {
+  const version = releaseVersion;
+  if (engineId !== id) {
+    await engine?.release();
+    engine = undefined;
+    engineId = undefined;
+  }
+  if (!verified.has(id)) {
+    if (!(await verifyModel(modelPath(id), signal, getLocalModel(id))))
+      throw new Error('The model is corrupted. Delete it and download it again.');
+    verified.add(id);
+  }
+  if (version !== releaseVersion) throw new Error('Offline model selection changed.');
+  signal?.throwIfAborted();
+  engine ??= new LocalEngine(modelPath(id), getLocalModel(id));
+  engineId = id;
+  return engine;
+}
+export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
+  const model = getLocalModel(id);
+  assertAvailable();
   controller = new AbortController();
-  phase = 'downloading';
-  error = '';
-  bytes = 0;
+  const state = status(id);
+  Object.assign(state, { phase: 'downloading', error: '', bytes: 0 });
   emit();
   let lastUpdate = 0;
   try {
-    await downloadModel(directory(), controller.signal, (downloaded, verifying) => {
-      bytes = downloaded;
-      phase = verifying ? 'verifying' : 'downloading';
-      if (verifying || Date.now() - lastUpdate > 150) {
-        lastUpdate = Date.now();
-        emit();
-      }
-    });
-    verified = true;
-    phase = 'ready';
+    await downloadModel(
+      directory(),
+      controller.signal,
+      (downloaded, verifying) => {
+        state.bytes = downloaded;
+        state.phase = verifying ? 'verifying' : 'downloading';
+        if (verifying || Date.now() - lastUpdate > 150) {
+          lastUpdate = Date.now();
+          emit();
+        }
+      },
+      model,
+    );
+    verified.add(id);
+    state.phase = 'ready';
   } catch (cause) {
-    phase = 'idle';
-    error = controller.signal.aborted
+    state.phase = 'idle';
+    state.error = controller.signal.aborted
       ? 'Download cancelled. Retry to download from the beginning.'
       : cause instanceof Error
         ? cause.message
@@ -91,19 +125,20 @@ export async function installLocal(): Promise<void> {
 export function cancelLocalDownload(): void {
   controller?.abort();
 }
-export async function deleteLocal(): Promise<void> {
-  if (working || controller)
-    throw new Error('The model is busy. Wait for it to finish before deleting.');
+export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
+  const state = status(id);
+  assertAvailable();
   working = true;
   emit();
   try {
-    await engine?.release();
-    engine = undefined;
-    verified = false;
-    await rm(modelPath(), { force: true });
-    phase = 'idle';
-    error = '';
-    bytes = 0;
+    if (engineId === id) {
+      await engine?.release();
+      engine = undefined;
+      engineId = undefined;
+    }
+    verified.delete(id);
+    await rm(modelPath(id), { force: true });
+    Object.assign(state, { phase: 'idle', error: '', bytes: 0 });
   } finally {
     working = false;
     emit();
@@ -115,54 +150,45 @@ export async function translateLocal(
   secondary: string,
   signal?: AbortSignal,
   onChunk?: (text: string) => void,
+  id = LOCAL_MODEL_ID,
 ): Promise<LocalResult> {
-  if (!localSupported) throw new Error('Offline translation requires an Apple Silicon Mac.');
-  if (working || controller)
-    throw new Error('The offline model is busy. Please wait and try again.');
-  if (!localState().installed)
-    throw new Error('Download the model in Settings → Offline Translation (1.13 GB).');
+  const state = status(id);
+  assertAvailable();
+  if (!localState(id).installed)
+    throw new Error('Download this model in Settings → Offline Translation.');
   working = true;
-  phase = 'translating';
-  error = '';
+  Object.assign(state, { phase: 'translating', error: '' });
   emit();
   try {
-    if (!verified) {
-      verified = await verifyModel(modelPath(), signal);
-      if (!verified) throw new Error('The model is corrupted. Delete it and download it again.');
-    }
-    engine ??= new LocalEngine(modelPath());
-    return await engine.translate(text, primary, secondary, signal, onChunk);
+    return await (await getEngine(id, signal)).translate(text, primary, secondary, signal, onChunk);
   } finally {
     working = false;
-    phase = 'ready';
+    state.phase = 'ready';
     emit();
   }
 }
 export function shutdownLocal(): void {
   cancelLocalDownload();
-  void engine?.release().then(emit);
+  releaseLocal();
 }
-
-export async function warmLocal(): Promise<void> {
-  if (!localSupported || !localState().installed || working || controller) return;
+export async function warmLocal(id = LOCAL_MODEL_ID): Promise<void> {
+  const state = status(id);
+  if (!localSupported || !localState(id).installed || working || controller) return;
   working = true;
-  phase = 'loading';
-  error = '';
+  Object.assign(state, { phase: 'loading', error: '' });
   emit();
   try {
-    if (!verified) verified = await verifyModel(modelPath());
-    if (!verified) throw new Error('The model is corrupted. Delete it and download it again.');
-    engine ??= new LocalEngine(modelPath());
-    await engine.warmup();
-    phase = 'ready';
+    await (await getEngine(id)).warmup();
+    state.phase = 'ready';
   } catch (cause) {
-    error = cause instanceof Error ? cause.message : String(cause);
-    phase = 'idle';
+    state.error = cause instanceof Error ? cause.message : String(cause);
+    state.phase = 'idle';
   } finally {
     working = false;
     emit();
   }
 }
 export function releaseLocal(): void {
+  releaseVersion++;
   void engine?.release().then(emit);
 }
