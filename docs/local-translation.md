@@ -28,9 +28,24 @@ Translations stream immediately as chunks become available. Empty output, repeat
 
 The installed, signed arm64 application was also checked: the settings preview delivered 14 incremental updates for “The update will not delete your files.” The first update arrived 362 ms after clicking Translate and completion arrived at 989 ms with the model already loaded. This is one UI smoke test, not a latency guarantee. The isolated settings download/cancel flow removed its partial file. Type checking, linting, and all 91 automated tests passed.
 
-Weights remain resident while selected, including preload at application startup. Per-request contexts are disposed after use so translation history is not carried into subsequent requests. Switching away or deleting releases the weights. Previewing an unselected local model releases it after the preview finishes.
+Weights remain resident while selected, including preload at application startup. The first translation creates one 4,096-token context, which subsequent requests reuse. After a successful translation, only the common instruction prefix remains in its KV cache; the source and translation are removed from the reusable sequence. Each request supplies its complete prompt, and node-llama-cpp reuses only matching prefix tokens. Changing translation direction therefore reevaluates the changed instruction. Tokenization across the instruction/source boundary can shorten the reusable prefix by a token.
+
+Cancellation, timeout, generation errors, output validation failures, and cache cleanup errors discard the context; a retry recreates it using the resident weights. There is at most one context per engine, regardless of request count or translation direction. The context is kept in memory until an error or explicit release, and is never saved to disk. Switching away or deleting releases the context before the weights. Previewing an unselected local model releases it after the preview finishes.
 
 Downloads use a pinned upstream revision, exact size, and SHA-256 from Hugging Face LFS metadata. A partial file is promoted only after verification. Cancellation and failed downloads remove the partial file. The application does not convert models on the user's machine: it downloads the already-quantized GGUF to avoid a much larger full-precision download and temporary RAM/disk usage.
+
+## Instruction-cache verification (2026-09-13)
+
+On the same M3 Air (24 GB), the production engine was compared with the previous per-request-context implementation, alternating execution order while sharing the same loaded weights. Both used the settings above and streamed output. The fixture indices were `0, 13, 4, 15, 2, 1, 3, 5, 8, 13, 4` (zero-based). The first pair warmed both paths; the other ten pairs included eight requests continuing the previous translation direction and two direction changes. Every successive cached request used different source text.
+
+| Model | First text, before → cached (median, eight same-direction pairs) | Decode speed, before → cached (median) | Additional retained Metal allocation over weights alone |
+| --- | ---: | ---: | ---: |
+| Hy-MT2 1.8B Q4_K_M | 179 → 63 ms | 49.7 → 49.9 tokens/s | 317 MiB |
+| Hy-MT2 7B Q4_K_M | 724 → 252 ms | 13.0 → 12.8 tokens/s | 579 MiB |
+
+The reusable prefix contained 51 tokens for 1.8B and 50 for 7B. Direction changes reused only 7 and 6 tokens respectively; their median first-text times were 162 → 123 ms (1.8B) and 698 → 642 ms (7B), with only two pairs per model. All 22 paired translations, including warmup, were byte-identical. Both models also passed cancellation after the first chunk, retry using the same weights with a new context, and explicit context/model release checks.
+
+These measurements time the engine call to the first text callback, exclude model loading, and do not measure UI rendering. Decode speed excludes the first output token. Desktop load varied, especially during the 7B run; the figures are a small regression check, not a latency guarantee or evidence of faster decoding. Memory figures are the increase reported by `getVramState().used` after retaining a context, not total application RAM. Removing request tokens does not release the context's reserved buffers; releasing the engine does. No extra model download or disk cache is required.
 
 ## Reproduce
 
