@@ -3,6 +3,10 @@ const fake = vi.hoisted(() => ({
   generate: vi.fn(),
   text: vi.fn(),
   contextDispose: vi.fn(),
+  completionDispose: vi.fn(),
+  completion: vi.fn(),
+  adapt: vi.fn(),
+  sequence: vi.fn(),
   modelDispose: vi.fn(),
   load: vi.fn(),
   create: vi.fn(),
@@ -10,7 +14,7 @@ const fake = vi.hoisted(() => ({
 vi.mock('node-llama-cpp', () => {
   fake.create.mockResolvedValue({
     contextSize: 4096,
-    getSequence: () => ({}),
+    getSequence: fake.sequence.mockReturnValue({ adaptStateToTokens: fake.adapt }),
     dispose: fake.contextDispose,
   });
   fake.load.mockResolvedValue({
@@ -21,11 +25,17 @@ vi.mock('node-llama-cpp', () => {
   return {
     getLlama: vi.fn().mockResolvedValue({ loadModel: fake.load }),
     LlamaCompletion: class {
+      constructor(options: unknown) {
+        fake.completion(options);
+      }
       generateCompletionWithMeta = fake.generate;
+      dispose = fake.completionDispose;
     },
-    LlamaText: fake.text.mockImplementation((): { tokenize: () => number[] } => ({
-      tokenize: (): number[] => [1, 2, 3],
-    })),
+    LlamaText: fake.text.mockImplementation(
+      (...parts: unknown[]): { tokenize: () => number[] } => ({
+        tokenize: (): number[] => (parts.length === 2 ? [1, 2] : [1, 2, 3]),
+      }),
+    ),
     SpecialTokensText: class {
       constructor(readonly value: string) {}
     },
@@ -36,25 +46,57 @@ import { LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, getLocalModel } from './model.ts';
 afterEach(() => {
   vi.clearAllMocks();
 });
-it('keeps weights across requests while disposing per-request contexts', async () => {
+it('reuses one context and sequence, retaining only instructions after each request', async () => {
   const engine = new LocalEngine('/model.gguf');
   fake.generate.mockResolvedValue({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
   await engine.warmup();
   await engine.translate('Hello', 'Japanese', 'English');
-  await engine.translate('Hello', 'Japanese', 'English');
+  await engine.translate('Good morning', 'Japanese', 'English');
   expect(fake.load).toHaveBeenCalledOnce();
-  expect(fake.contextDispose).toHaveBeenCalledTimes(2);
+  expect(fake.create).toHaveBeenCalledOnce();
+  expect(fake.sequence).toHaveBeenCalledOnce();
+  expect(fake.completion.mock.calls[0]).toEqual(fake.completion.mock.calls[1]);
+  expect(fake.adapt.mock.calls).toEqual([
+    [[1, 2], false],
+    [[1, 2], false],
+  ]);
+  expect(fake.completionDispose).toHaveBeenCalledTimes(2);
+  expect(fake.completionDispose).toHaveBeenCalledWith({ disposeSequence: false });
+  expect(fake.contextDispose).not.toHaveBeenCalled();
   expect(fake.modelDispose).not.toHaveBeenCalled();
   await engine.release();
-  expect(fake.modelDispose).toHaveBeenCalledOnce();
-});
-it('rejects truncated output and disposes the context on failure', async () => {
-  fake.generate.mockResolvedValue({ response: '途中', metadata: { stopReason: 'maxTokens' } });
-  await expect(
-    new LocalEngine('/model.gguf').translate('Hello', 'Japanese', 'English'),
-  ).rejects.toThrow('length limit');
+  await engine.release();
   expect(fake.contextDispose).toHaveBeenCalledOnce();
+  expect(fake.modelDispose).toHaveBeenCalledOnce();
+  expect(fake.contextDispose).toHaveBeenCalledBefore(fake.modelDispose);
+  await engine.translate('Hello', 'Japanese', 'English');
+  expect(fake.load).toHaveBeenCalledTimes(2);
+  expect(fake.create).toHaveBeenCalledTimes(2);
 });
+it.each([
+  ['truncated', '途中', 'maxTokens', 'length limit'],
+  ['invalid', '', 'eogToken', 'valid translation'],
+])(
+  'discards a %s result and recreates the context for a retry',
+  async (_, response, stopReason, error) => {
+    const engine = new LocalEngine('/model.gguf');
+    fake.generate.mockResolvedValueOnce({ response, metadata: { stopReason } });
+    await expect(engine.translate('Hello', 'Japanese', 'English')).rejects.toThrow(error);
+    expect(fake.contextDispose).toHaveBeenCalledOnce();
+    expect(fake.adapt).not.toHaveBeenCalled();
+    fake.generate.mockResolvedValueOnce({
+      response: 'こんにちは',
+      metadata: { stopReason: 'eogToken' },
+    });
+    await expect(engine.translate('Hello', 'Japanese', 'English')).resolves.toHaveProperty(
+      'translation',
+      'こんにちは',
+    );
+    expect(fake.create).toHaveBeenCalledTimes(2);
+    expect(fake.sequence).toHaveBeenCalledTimes(2);
+    expect(fake.load).toHaveBeenCalledOnce();
+  },
+);
 it('does not start GPU work for an already cancelled request', async () => {
   const controller = new AbortController();
   controller.abort();
@@ -63,7 +105,7 @@ it('does not start GPU work for an already cancelled request', async () => {
   ).rejects.toThrow();
   expect(fake.load).not.toHaveBeenCalled();
 });
-it('serializes generation so two requests cannot allocate contexts concurrently', async () => {
+it('serializes requests and waits for generation before releasing shared state', async () => {
   const engine = new LocalEngine('/model.gguf');
   const pending = Promise.withResolvers<{ response: string; metadata: { stopReason: string } }>();
   fake.generate
@@ -72,10 +114,71 @@ it('serializes generation so two requests cannot allocate contexts concurrently'
   const first = engine.translate('Hello', 'Japanese', 'English');
   await vi.waitFor(() => expect(fake.generate).toHaveBeenCalledOnce());
   const second = engine.translate('Hello again', 'Japanese', 'English');
+  const released = engine.release();
   expect(fake.create).toHaveBeenCalledOnce();
+  expect(fake.generate).toHaveBeenCalledOnce();
+  expect(fake.contextDispose).not.toHaveBeenCalled();
   pending.resolve({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
-  await Promise.all([first, second]);
+  await Promise.all([first, second, released]);
+  expect(fake.create).toHaveBeenCalledOnce();
+  expect(fake.contextDispose).toHaveBeenCalledOnce();
+  expect(fake.adapt).toHaveBeenCalledTimes(2);
+  expect(fake.adapt).toHaveBeenCalledBefore(fake.contextDispose);
+});
+
+it('recovers from cancellation without reloading weights or forwarding late chunks', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  const controller = new AbortController();
+  fake.generate.mockImplementationOnce(
+    (_input: unknown, options: { onTextChunk: (chunk: string) => void; signal: AbortSignal }) => {
+      options.onTextChunk('こん');
+      controller.abort(new Error('Cancelled'));
+      options.onTextChunk('にちは');
+      throw options.signal.reason;
+    },
+  );
+  const chunks = vi.fn();
+  await expect(
+    engine.translate('Hello', 'Japanese', 'English', controller.signal, chunks),
+  ).rejects.toThrow('Cancelled');
+  expect(chunks.mock.calls).toEqual([['こん']]);
+  expect(fake.contextDispose).toHaveBeenCalledOnce();
+  expect(fake.completionDispose).toHaveBeenCalledOnce();
+  fake.generate.mockResolvedValueOnce({
+    response: 'こんにちは',
+    metadata: { stopReason: 'eogToken' },
+  });
+  await engine.translate('Hello again', 'Japanese', 'English');
   expect(fake.create).toHaveBeenCalledTimes(2);
+  expect(fake.load).toHaveBeenCalledOnce();
+});
+
+it('discards the context if instruction-cache cleanup fails', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  fake.generate.mockResolvedValue({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
+  fake.adapt.mockRejectedValueOnce(new Error('Cache failure'));
+  await expect(engine.translate('Hello', 'Japanese', 'English')).rejects.toThrow('Cache failure');
+  await engine.translate('Hello again', 'Japanese', 'English');
+  expect(fake.create).toHaveBeenCalledTimes(2);
+  expect(fake.contextDispose).toHaveBeenCalledOnce();
+});
+
+it('uses the current source and target language when direction changes', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  fake.generate
+    .mockResolvedValueOnce({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } })
+    .mockResolvedValueOnce({ response: 'Goodbye', metadata: { stopReason: 'eogToken' } });
+  await engine.translate('Hello', 'Japanese', 'English');
+  await expect(engine.translate('さようなら', 'Japanese', 'English')).resolves.toMatchObject({
+    translation: 'Goodbye',
+    targetLanguage: 'English',
+  });
+  const fullInputs = fake.text.mock.calls.filter(parts => parts.length === 3);
+  expect(fullInputs[0]?.[1]).toMatch(/^Translate the following text into Japanese\..*\nHello$/);
+  expect(fullInputs[1]?.[1]).toMatch(/^Translate the following text into English\..*\nさようなら$/);
+  const prefixes = fake.text.mock.calls.filter(parts => parts.length === 2);
+  expect(prefixes[1]?.[1]).toMatch(/^Translate the following text into English\..*\n$/);
+  expect(fake.create).toHaveBeenCalledOnce();
 });
 
 it('delivers cumulative chunks before generation finishes', async () => {
