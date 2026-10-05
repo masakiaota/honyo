@@ -2,10 +2,6 @@ appId: com.rot1024.honyo
 productName: Honyo
 directories:
   output: dist
-publish:
-  provider: github
-  owner: rot1024
-  repo: honyo
 files:
   - build/**/*
   - node_modules/**/*

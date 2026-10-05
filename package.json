@@ -34,20 +34,19 @@
     "release:major": "standard-version --release-as major",
     "release:patch": "standard-version --release-as patch"
   },
-  "repository": "https://github.com/rot1024/honyo.git",
+  "repository": "https://github.com/masakiaota/honyo.git",
   "keywords": [],
   "author": "rot1024 <aayhrot@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/rot1024/honyo/issues"
+    "url": "https://github.com/masakiaota/honyo/issues"
   },
-  "homepage": "https://github.com/rot1024/honyo#readme",
+  "homepage": "https://github.com/masakiaota/honyo#readme",
   "description": "Instant AI translation anywhere: select text and double-copy (C+C)",
   "devDependencies": {
     "@electron/universal": "^3.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.6.2",
-    "@types/turndown": "^5.0.5",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
     "@vitest/coverage-v8": "^4.1.11",
@@ -75,78 +74,8 @@
     "@openai/codex": "^0.152.0",
     "ai": "^5.0.60",
     "dotenv": "^17.2.3",
-    "electron-updater": "^6.6.2",
     "node-llama-cpp": "^3.20.0",
-    "turndown": "^7.2.1",
     "uiohook-napi": "^1.5.4",
     "zod": "^4.1.11"
-  },
-  "buildConfig": {
-    "appId": "com.rot1024.honyo",
-    "productName": "Honyo",
-    "directories": {
-      "output": "dist"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "eukarya-inc",
-      "repo": "honyo"
-    },
-    "files": [
-      "build/**/*",
-      "node_modules/**/*",
-      "package.json",
-      "*.html",
-      "assets/setup/**/*"
-    ],
-    "extraMetadata": {
-      "main": "build/main.js"
-    },
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/uiohook-napi/**/*",
-      "node_modules/@openai/codex/**/*",
-      "node_modules/@openai/codex-*/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "src/ui/icon-normal.png",
-        "to": "icons/icon-normal.png"
-      },
-      {
-        "from": "src/ui/icon-translating.png",
-        "to": "icons/icon-translating.png"
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "icon": "assets/icons/icon.icns",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": "universal"
-        },
-        {
-          "target": "zip",
-          "arch": "universal"
-        }
-      ]
-    },
-    "npmRebuild": true,
-    "win": {
-      "target": "nsis",
-      "icon": "assets/icons/icon.ico"
-    },
-    "linux": {
-      "icon": "assets/icons",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    }
   }
 }

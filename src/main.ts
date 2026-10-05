@@ -15,7 +15,6 @@ import {
   checkAccessibilityPermission,
 } from './app/index.ts';
 import { setupPopupIPC } from './ui/popup.ts';
-import { setupAutoUpdater } from './app/updater.ts';
 import { initializeCodex } from './codex/index.ts';
 
 // Initialize the app
@@ -51,9 +50,6 @@ function initialize(): void {
     // Start and initialize the App Server before the shortcut listener is
     // enabled. This keeps the Cmd+C Cmd+C path free of process startup work.
     await initializeCodex();
-
-    // Setup auto-updater
-    setupAutoUpdater();
 
     // Create tray icon
     createTray();

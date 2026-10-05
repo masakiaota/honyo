@@ -1,5 +1,5 @@
 import type { Tray } from 'electron';
-import { Menu, app } from 'electron';
+import { Menu, app, shell } from 'electron';
 import { uIOhook } from 'uiohook-napi';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -10,14 +10,10 @@ import { getModelInfo } from '../models-remote.ts';
 import { getConfig, updateConfig, getPausedState, setPausedState } from '../config/index.ts';
 import { openSetupWindow } from '../app/accessibility.ts';
 import { openSettingsWindow } from './settings.ts';
-import {
-  checkForUpdates,
-  isCheckingUpdate,
-  isDownloadingUpdate,
-  getDownloadProgress,
-} from '../app/updater.ts';
 import { cancelCurrentTranslation, isCurrentlyTranslating } from '../keyboard/handler.ts';
 import { closePopup } from './popup.ts';
+
+const RELEASES_URL = 'https://github.com/masakiaota/honyo/releases/latest';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -164,14 +160,9 @@ export function createTrayMenu(tray: Tray | null, updateTrayTitle: (title: strin
     },
     { type: 'separator' },
     {
-      label: isDownloadingUpdate()
-        ? `Downloading Update (${getDownloadProgress()}%)...`
-        : isCheckingUpdate()
-          ? 'Checking for Updates...'
-          : 'Check for Updates...',
-      enabled: !isCheckingUpdate() && !isDownloadingUpdate(),
+      label: 'Download Latest Release...',
       click: (): void => {
-        checkForUpdates();
+        void shell.openExternal(RELEASES_URL);
       },
     },
     {
