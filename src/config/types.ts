@@ -37,7 +37,6 @@ export interface Config {
   codexReasoningEfforts?: Partial<Record<string, string>>;
   codexFastModels?: string[];
   customLanguages?: string[];
-  skippedUpdateVersion?: string;
   enableStreaming?: boolean;
   openAtLogin?: boolean;
   popupFontSize?: number;
