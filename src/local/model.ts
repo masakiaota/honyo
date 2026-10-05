@@ -74,8 +74,7 @@ export function localDirection(
   if (japaneseChars > 0 && englishChars === 0) {
     sourceLanguage = 'Japanese';
   } else if (japaneseChars > 0 && englishChars > 0) {
-    sourceLanguage =
-      japaneseChars / (japaneseChars + englishChars) >= 0.3 ? 'Japanese' : 'English';
+    sourceLanguage = japaneseChars / (japaneseChars + englishChars) >= 0.3 ? 'Japanese' : 'English';
   }
   return { sourceLanguage, targetLanguage: sourceLanguage === 'Japanese' ? 'English' : 'Japanese' };
 }
