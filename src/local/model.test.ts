@@ -18,15 +18,28 @@ it('limits input by Unicode characters without silently truncating', () => {
   expect(() => validateLocalInput('a'.repeat(2001))).toThrow();
   expect(() => validateLocalInput('   ')).toThrow();
 });
-it('rejects empty, looping and untranslated English output', () => {
-  expect(() => validateLocalOutput('', 'Japanese')).toThrow();
-  expect(() => validateLocalOutput('This is a repeated phrase.'.repeat(5), 'English')).toThrow();
-  expect(() => validateLocalOutput('これは日本語です。', 'English')).toThrow();
-  expect(() => validateLocalOutput('Not everyone agrees.', 'English')).not.toThrow();
+it('rejects empty and looping output', () => {
+  expect(() => validateLocalOutput('')).toThrow();
+  expect(() => validateLocalOutput('This is a repeated phrase.'.repeat(5))).toThrow();
+  expect(() => validateLocalOutput('Not everyone agrees.')).not.toThrow();
+});
+
+it('allows UI literals in English output', () => {
+  const source =
+    'タスクバーの IME の表示がずっと「A」のまま Meltype が Windows の IME を OFF にしているためです。';
+  expect(() =>
+    validateLocalOutput(
+      'The taskbar IME shows "A" because Meltype turns Windows IME OFF. The mode is shown by "あ"/"A".',
+      source,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    validateLocalOutput('Right-click the tray icon and adjust "自動判定の強さ".', source),
+  ).not.toThrow();
 });
 
 it('does not accept damaged code or URLs as successful translations', () => {
-  expect(() => validateLocalOutput('実行する', 'Japanese', 'Run `npm install`')).toThrow();
-  expect(() => validateLocalOutput('サイト', 'Japanese', 'Visit https://example.com')).toThrow();
-  expect(() => validateLocalOutput('Run `日本語`', 'English', '`日本語`を実行する')).not.toThrow();
+  expect(() => validateLocalOutput('実行する', 'Run `npm install`')).toThrow();
+  expect(() => validateLocalOutput('サイト', 'Visit https://example.com')).toThrow();
+  expect(() => validateLocalOutput('Run `日本語`', '`日本語`を実行する')).not.toThrow();
 });

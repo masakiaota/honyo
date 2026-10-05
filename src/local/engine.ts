@@ -122,7 +122,7 @@ export class LocalEngine {
         if (result.metadata.stopReason === 'maxTokens')
           throw new Error('Translation reached its length limit. Please split the text and retry.');
         const translation = result.response.trim();
-        validateLocalOutput(translation, direction.targetLanguage, text);
+        validateLocalOutput(translation, text);
         // Remove the source and result. Token alignment also handles a token that spans
         // the instruction/source boundary; that token must be evaluated again next time.
         await sequence.adaptStateToTokens(
