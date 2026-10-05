@@ -170,17 +170,17 @@ Settings and API keys are stored in the app's local data directory. API keys are
 
 Console output can include excerpts of copied text. Remove private text and credentials before sharing logs in an issue.
 
-## Update from source
+## Update
 
-Quit Honyo, then run these commands in your checkout:
+For the packaged app, use the tray menu **Download Latest Release...**. It opens this fork's [Releases page](https://github.com/masakiaota/honyo/releases/latest). Quit Honyo and replace the app with the newer download. There is no in-app automatic update.
+
+When running from source, quit Honyo, then run these commands in your checkout:
 
 ```bash
 git pull --ff-only
 npm ci
 npm start
 ```
-
-The in-app updater currently points to the original project's releases. Use the source update procedure above for this fork.
 
 ## Development and contributions
 
