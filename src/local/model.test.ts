@@ -5,6 +5,12 @@ it.each([
   ['保存してください。', 'Japanese', 'English'],
   ['設定', 'Japanese', 'English'],
   ['Run `設定` now.', 'English', 'Japanese'],
+  ['GitHub の Releases ページを開く', 'Japanese', 'English'],
+  [
+    'Removed the script-based language check. UI text such as あ no longer triggers a false error.',
+    'English',
+    'Japanese',
+  ],
 ])('detects prose direction for %s', (text, sourceLanguage, targetLanguage) => {
   expect(localDirection(text, 'Japanese', 'English')).toEqual({ sourceLanguage, targetLanguage });
   expect(localDirection(text, 'English', 'Japanese')).toEqual({ sourceLanguage, targetLanguage });

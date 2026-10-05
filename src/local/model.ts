@@ -61,12 +61,22 @@ export function localDirection(
       'Offline translation supports English ↔ Japanese. Please change your language settings.',
     );
   }
-  // Kana/Kanji identify Japanese, including short labels containing only Kanji.
+  // Dominant-language detection: a single mentioned character must not flip
+  // a long passage. English needs several Latin letters per word while one
+  // kana/kanji carries a morpheme, so the neutral point sits below 0.5.
   // Ignore code and URLs so identifiers do not affect prose language detection.
   const prose = text.replace(/```[\s\S]*?```|`[^`]*`|https?:\/\/\S+/g, '');
-  const sourceLanguage = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(prose)
-    ? 'Japanese'
-    : 'English';
+  const japaneseChars = (
+    prose.match(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/gu) ?? []
+  ).length;
+  const englishChars = (prose.match(/[A-Za-z]/g) ?? []).length;
+  let sourceLanguage = 'English';
+  if (japaneseChars > 0 && englishChars === 0) {
+    sourceLanguage = 'Japanese';
+  } else if (japaneseChars > 0 && englishChars > 0) {
+    sourceLanguage =
+      japaneseChars / (japaneseChars + englishChars) >= 0.3 ? 'Japanese' : 'English';
+  }
   return { sourceLanguage, targetLanguage: sourceLanguage === 'Japanese' ? 'English' : 'Japanese' };
 }
 
