@@ -12,7 +12,13 @@ export function getEffectiveMaxInputCharacters(configMax: number, modelId?: stri
 }
 
 export function exceedsInputCharacterLimit(text: string, limit: number): boolean {
-  return [...text].length > limit;
+  let count = 0;
+  const iterator = text[Symbol.iterator]();
+  while (true) {
+    if (iterator.next().done) return false;
+    count += 1;
+    if (count > limit) return true;
+  }
 }
 
 export function getInputCharacterLimitMessage(limit: number): string {
