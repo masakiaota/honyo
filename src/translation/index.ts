@@ -10,6 +10,11 @@ import { getAIProvider } from './providers.ts';
 import { getConfig, getApiKeys } from '../config/index.ts';
 import type { Config, ApiKeys } from '../config/types.ts';
 import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
+import {
+  exceedsInputCharacterLimit,
+  getEffectiveMaxInputCharacters,
+  getInputCharacterLimitMessage,
+} from '../input-character-limit.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
 import { runCodexText } from '../codex/index.ts';
 import { getCodexModelId, isCodexModelKey } from '../codex/models.ts';
@@ -171,6 +176,12 @@ function handleTranslationError(error: unknown, config: Config): string {
   return 'Translation failed: ' + (error instanceof Error ? error.message : String(error));
 }
 
+function assertWithinInputLimit(text: string, config: Config): void {
+  const limit = getEffectiveMaxInputCharacters(config.maxInputCharacters, config.aiModel);
+  if (exceedsInputCharacterLimit(text, limit))
+    throw new Error(getInputCharacterLimitMessage(limit));
+}
+
 /**
  * Perform a translation without catching errors: rejects (throws) on API
  * failures and throws on API-key/model validation failure. Returns the
@@ -185,6 +196,7 @@ export async function translateTextDetailed(
 ): Promise<TranslationResult> {
   const config = getConfig();
   const apiKeys = getApiKeys();
+  assertWithinInputLimit(text, config);
 
   if (isLocalModel(config.aiModel))
     return translateLocal(
@@ -297,6 +309,7 @@ export async function translateTextStreaming(
 ): Promise<string> {
   const config = previewConfig ?? getConfig();
   const apiKeys = getApiKeys();
+  assertWithinInputLimit(text, config);
 
   try {
     if (isLocalModel(config.aiModel)) {

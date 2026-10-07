@@ -52,7 +52,7 @@ const requestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('test'),
     draft: draftSchema,
-    text: z.string().trim().min(1).max(2000),
+    text: z.string().trim().min(1),
   }),
   z.object({ action: z.enum(['install', 'delete']), id: z.string() }),
   z.object({ action: z.enum(['cancel', 'login', 'logout']) }),
