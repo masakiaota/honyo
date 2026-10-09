@@ -7,6 +7,7 @@ const fake = vi.hoisted(() => ({
   completion: vi.fn(),
   adapt: vi.fn(),
   sequence: vi.fn(),
+  prefill: vi.fn(),
   modelDispose: vi.fn(),
   load: vi.fn(),
   create: vi.fn(),
@@ -14,7 +15,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('node-llama-cpp', () => {
   fake.create.mockResolvedValue({
     contextSize: 4096,
-    getSequence: fake.sequence.mockReturnValue({ adaptStateToTokens: fake.adapt }),
+    getSequence: fake.sequence.mockReturnValue({
+      adaptStateToTokens: fake.adapt,
+      evaluateWithoutGeneratingNewTokens: fake.prefill,
+      nextTokenIndex: 0,
+    }),
     dispose: fake.contextDispose,
   });
   fake.load.mockResolvedValue({
@@ -59,6 +64,7 @@ it('reuses one context and sequence, retaining only instructions after each requ
   expect(fake.adapt.mock.calls).toEqual([
     [[1, 2], false],
     [[1, 2], false],
+    [[1, 2], false],
   ]);
   expect(fake.completionDispose).toHaveBeenCalledTimes(2);
   expect(fake.completionDispose).toHaveBeenCalledWith({ disposeSequence: false });
@@ -72,6 +78,49 @@ it('reuses one context and sequence, retaining only instructions after each requ
   await engine.translate('Hello', 'Japanese', 'English');
   expect(fake.load).toHaveBeenCalledTimes(2);
   expect(fake.create).toHaveBeenCalledTimes(2);
+});
+it.each([LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID])(
+  'prefills only the common instruction for %s and preserves it for the first request',
+  async id => {
+    const engine = new LocalEngine('/model.gguf', getLocalModel(id));
+    await engine.warmup('English');
+    expect(fake.prefill).toHaveBeenCalledWith([1, 2]);
+    expect(fake.completion).not.toHaveBeenCalled();
+    expect(fake.generate).not.toHaveBeenCalled();
+    expect(fake.text.mock.calls[0]?.[1]).toMatch(
+      /^Translate the following text into English\..*\n$/,
+    );
+    const warmedPrefix = fake.text.mock.calls[0];
+    fake.generate.mockResolvedValueOnce({
+      response: 'Hello',
+      metadata: { stopReason: 'eogToken' },
+    });
+    await engine.translate('こんにちは', 'English', 'Japanese');
+    const request = fake.text.mock.calls.find(parts => parts.length === 3);
+    expect(request?.[0]).toEqual(warmedPrefix?.[0]);
+    expect(request?.[1]).toBe(String(warmedPrefix?.[1]) + 'こんにちは');
+    expect(fake.create).toHaveBeenCalledOnce();
+    await engine.release();
+  },
+);
+
+it('discards a failed prefill, retries with the same weights and waits for prefill before release', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  fake.prefill.mockRejectedValueOnce(new Error('Prefill failed'));
+  await expect(engine.warmup()).rejects.toThrow('Prefill failed');
+  expect(fake.contextDispose).toHaveBeenCalledOnce();
+  const pending = Promise.withResolvers<void>();
+  fake.prefill.mockReturnValueOnce(pending.promise);
+  const warmed = engine.warmup();
+  await vi.waitFor(() => expect(fake.prefill).toHaveBeenCalledTimes(2));
+  const released = engine.release();
+  expect(fake.modelDispose).not.toHaveBeenCalled();
+  pending.resolve();
+  await Promise.all([warmed, released]);
+  expect(fake.load).toHaveBeenCalledOnce();
+  expect(fake.create).toHaveBeenCalledTimes(2);
+  expect(fake.contextDispose).toHaveBeenCalledTimes(2);
+  expect(fake.modelDispose).toHaveBeenCalledOnce();
 });
 it.each([
   ['truncated', '途中', 'maxTokens', 'length limit'],
