@@ -39,7 +39,8 @@ function initialize(): void {
     // Initialize configuration
     const firstLaunch = !existsSync(join(app.getPath('userData'), 'config.json'));
     initializeConfig();
-    if (isLocalModel(getConfig().aiModel)) void warmLocal(getConfig().aiModel);
+    if (isLocalModel(getConfig().aiModel))
+      void warmLocal(getConfig().aiModel, getConfig().targetLanguage);
 
     // Pin the currently-selected model so the model-list cap never drops it
     setSelectedModelProvider(() => getConfig().aiModel);

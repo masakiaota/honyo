@@ -185,7 +185,7 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
           if (!localState(draft.modelId).installed)
             throw new Error('Download this model before saving or testing it.');
           touchedLocal = true;
-          await warmLocal(draft.modelId);
+          await warmLocal(draft.modelId, next.targetLanguage);
           if (localState(draft.modelId).error) throw new Error(localState(draft.modelId).error);
         } else if (draft.provider === 'codex') {
           if (getCodexConnectionState().status !== 'connected')
@@ -228,7 +228,8 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
     } finally {
       if (touchedLocal && !saved) {
         releaseLocal();
-        if (isLocalModel(getConfig().aiModel)) await warmLocal(getConfig().aiModel);
+        if (isLocalModel(getConfig().aiModel))
+          await warmLocal(getConfig().aiModel, getConfig().targetLanguage);
       }
       busy = false;
       publish();

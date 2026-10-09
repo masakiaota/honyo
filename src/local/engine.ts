@@ -7,6 +7,10 @@ import type {
 } from 'node-llama-cpp';
 import { LOCAL_MODEL, localDirection, validateLocalInput, validateLocalOutput } from './model.ts';
 
+function translationInstruction(targetLanguage: string): string {
+  return `Translate the following text into ${targetLanguage}. Note that you should only output the translated result without any additional explanation. Preserve meaning, negation, numbers, names, Markdown formatting, code and URLs exactly. Use standard Japanese technical terminology when translating into Japanese:\n`;
+}
+
 /** One GPU evaluation at a time; weights and one instruction cache stay resident. */
 export class LocalEngine {
   private model: LlamaModel | undefined;
@@ -25,13 +29,58 @@ export class LocalEngine {
     return next;
   }
 
-  warmup(): Promise<void> {
+  warmup(targetLanguage = 'Japanese'): Promise<void> {
     return this.exclusive(async () => {
-      if (this.model) return;
+      const signal = AbortSignal.timeout(90_000);
+      try {
+        const { LlamaText, SpecialTokensText } = await import('node-llama-cpp');
+        const { model, sequence } = await this.prepare(signal);
+        const prefix = LlamaText(
+          new SpecialTokensText(this.startTokens()),
+          translationInstruction(targetLanguage),
+        ).tokenize(model.tokenizer);
+        await sequence.adaptStateToTokens(prefix, false);
+        signal.throwIfAborted();
+        const remaining = prefix.slice(sequence.nextTokenIndex);
+        // Prefill only: no source text, assistant role, sampling or generated translation.
+        if (remaining.length) await sequence.evaluateWithoutGeneratingNewTokens(remaining);
+        signal.throwIfAborted();
+      } catch (error) {
+        await this.disposeContext();
+        throw error;
+      }
+    });
+  }
+
+  private startTokens(): string {
+    return this.spec.template === 'hy7'
+      ? '<|startoftext|>'
+      : '<｜hy_begin▁of▁sentence｜><｜hy_User｜>';
+  }
+
+  private async prepare(signal: AbortSignal): Promise<{
+    model: LlamaModel;
+    context: LlamaContext;
+    sequence: LlamaContextSequence;
+  }> {
+    signal.throwIfAborted();
+    if (!this.model) {
       const { getLlama } = await import('node-llama-cpp');
       const llama = await getLlama({ gpu: 'metal', build: 'never', maxThreads: 2 });
       this.model = await llama.loadModel({ modelPath: this.modelPath, gpuLayers: 'max' });
-    });
+    }
+    signal.throwIfAborted();
+    const model = this.model;
+    const context = (this.context ??= await model.createContext({
+      contextSize: 4096,
+      batchSize: 128,
+      threads: 2,
+      flashAttention: true,
+      createSignal: signal,
+    }));
+    const sequence = (this.sequence ??= context.getSequence());
+    signal.throwIfAborted();
+    return { model, context, sequence };
   }
 
   release(): Promise<void> {
@@ -68,30 +117,12 @@ export class LocalEngine {
         AbortSignal.timeout(90_000),
       ]);
       boundedSignal.throwIfAborted();
-      const { getLlama, LlamaCompletion, LlamaText, SpecialTokensText } =
-        await import('node-llama-cpp');
-      if (!this.model) {
-        const llama = await getLlama({ gpu: 'metal', build: 'never', maxThreads: 2 });
-        this.model = await llama.loadModel({ modelPath: this.modelPath, gpuLayers: 'max' });
-      }
-      boundedSignal.throwIfAborted();
+      const { LlamaCompletion, LlamaText, SpecialTokensText } = await import('node-llama-cpp');
       let completion: LlamaCompletion | undefined;
       try {
-        const context = (this.context ??= await this.model.createContext({
-          contextSize: 4096,
-          batchSize: 128,
-          threads: 2,
-          flashAttention: true,
-          createSignal: boundedSignal,
-        }));
-        const sequence = (this.sequence ??= context.getSequence());
-        boundedSignal.throwIfAborted();
-        const start = new SpecialTokensText(
-          this.spec.template === 'hy7'
-            ? '<|startoftext|>'
-            : '<｜hy_begin▁of▁sentence｜><｜hy_User｜>',
-        );
-        const instruction = `Translate the following text into ${direction.targetLanguage}. Note that you should only output the translated result without any additional explanation. Preserve meaning, negation, numbers, names, Markdown formatting, code and URLs exactly. Use standard Japanese technical terminology when translating into Japanese:\n`;
+        const { model, context, sequence } = await this.prepare(boundedSignal);
+        const start = new SpecialTokensText(this.startTokens());
+        const instruction = translationInstruction(direction.targetLanguage);
         // Source remains ordinary text: model special tokens in copied text cannot create roles.
         const input = LlamaText(
           start,
@@ -100,7 +131,7 @@ export class LocalEngine {
             this.spec.template === 'hy7' ? '<|extra_0|>' : '<｜hy_Assistant｜>',
           ),
         );
-        const tokens = input.tokenize(this.model.tokenizer);
+        const tokens = input.tokenize(model.tokenizer);
         const maxTokens = Math.min(2048, context.contextSize - tokens.length - 16);
         if (maxTokens < 512)
           throw new Error('The text is too long. Please split it into shorter passages.');
@@ -126,7 +157,7 @@ export class LocalEngine {
         // Remove the source and result. Token alignment also handles a token that spans
         // the instruction/source boundary; that token must be evaluated again next time.
         await sequence.adaptStateToTokens(
-          LlamaText(start, instruction).tokenize(this.model.tokenizer),
+          LlamaText(start, instruction).tokenize(model.tokenizer),
           false,
         );
         boundedSignal.throwIfAborted();

@@ -171,14 +171,14 @@ export function shutdownLocal(): void {
   cancelLocalDownload();
   releaseLocal();
 }
-export async function warmLocal(id = LOCAL_MODEL_ID): Promise<void> {
+export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'): Promise<void> {
   const state = status(id);
   if (!localSupported || !localState(id).installed || working || controller) return;
   working = true;
   Object.assign(state, { phase: 'loading', error: '' });
   emit();
   try {
-    await (await getEngine(id)).warmup();
+    await (await getEngine(id)).warmup(targetLanguage);
     state.phase = 'ready';
   } catch (cause) {
     state.error = cause instanceof Error ? cause.message : String(cause);

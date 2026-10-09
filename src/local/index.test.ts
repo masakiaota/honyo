@@ -11,6 +11,7 @@ const fake = vi.hoisted(() => {
   return {
     descriptors,
     events: [] as string[],
+    targets: [] as string[],
     verify: vi.fn().mockResolvedValue(true),
     deleted: vi.fn(),
     pending: undefined as Promise<void> | undefined,
@@ -28,8 +29,9 @@ vi.mock('./download.ts', () => ({ verifyModel: fake.verify, downloadModel: vi.fn
 vi.mock('./engine.ts', () => ({
   LocalEngine: class {
     constructor(private path: string) {}
-    warmup(): Promise<void> {
+    warmup(targetLanguage: string): Promise<void> {
       fake.events.push('load:' + this.path);
+      fake.targets.push(targetLanguage);
       return Promise.resolve();
     }
     async release(): Promise<void> {
@@ -50,13 +52,14 @@ it('releases the old model before loading another, verifies each and only delete
   await warmLocal(LOCAL_MODEL_ID);
   const pending = Promise.withResolvers<void>();
   fake.pending = pending.promise;
-  const switching = warmLocal(LOCAL_7B_MODEL_ID);
+  const switching = warmLocal(LOCAL_7B_MODEL_ID, 'English');
   await vi.waitFor(() => expect(fake.events).toHaveLength(2));
   expect(fake.events[1]).toContain('release:');
   expect(localState(LOCAL_7B_MODEL_ID).busy).toBe(true);
   await expect(deleteLocal(LOCAL_MODEL_ID)).rejects.toThrow('busy');
   pending.resolve();
   await switching;
+  expect(fake.targets).toEqual(['Japanese', 'English']);
   expect(fake.events[2]).toContain('load:/test-data/models/Hy-MT2-7B-');
   expect(fake.verify).toHaveBeenLastCalledWith(
     expect.stringContaining('7B'),
