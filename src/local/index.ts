@@ -6,18 +6,33 @@ import { rm } from 'node:fs/promises';
 import { getLocalModel, LOCAL_MODEL_ID } from './model.ts';
 import { downloadModel, verifyModel } from './download.ts';
 import { LocalEngine } from './engine.ts';
+import { MlxEngine } from './mlx-engine.ts';
 
 export const localSupported = process.platform === 'darwin' && process.arch === 'arm64';
 const directory = (): string => join(app.getPath('userData'), 'models');
 const modelPath = (id: string): string => join(directory(), getLocalModel(id).file);
 let controller: AbortController | undefined;
-let engine: LocalEngine | undefined;
+type TranslationEngine = Pick<LocalEngine, 'translate' | 'warmup' | 'release'>;
+let engine: TranslationEngine | undefined;
 let engineId: string | undefined;
+let releasing: Promise<void> = Promise.resolve();
 const verified = new Set<string>();
 let working = false;
 let releaseVersion = 0;
 const progress = new Map<string, { phase: string; bytes: number; error: string }>();
 const listeners = new Set<() => void>();
+
+function mlxHelperPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'mlx', 'honyo-mlx')
+    : join(app.getAppPath(), 'build', 'mlx', 'honyo-mlx');
+}
+function assertEngineAvailable(id: string): void {
+  if (getLocalModel(id).engine === 'mlx' && !existsSync(mlxHelperPath()))
+    throw new Error(
+      'The MLX helper is missing. Rebuild the app with npm run build:mlx or reinstall it.',
+    );
+}
 function status(id: string): { phase: string; bytes: number; error: string } {
   getLocalModel(id);
   const existing = progress.get(id);
@@ -41,7 +56,9 @@ export function localState(id = LOCAL_MODEL_ID): LocalState {
   const model = getLocalModel(id);
   let installed = false;
   try {
-    installed = existsSync(modelPath(id)) && statSync(modelPath(id)).size === model.bytes;
+    installed = model.assets
+      ? model.assets.every(asset => statSync(join(modelPath(id), asset.file)).size === asset.bytes)
+      : existsSync(modelPath(id)) && statSync(modelPath(id)).size === model.bytes;
   } catch {
     /* missing */
   }
@@ -67,8 +84,10 @@ function assertAvailable(): void {
   if (working || controller)
     throw new Error('The offline model is busy. Please wait and try again.');
 }
-async function getEngine(id: string, signal?: AbortSignal): Promise<LocalEngine> {
+async function getEngine(id: string, signal?: AbortSignal): Promise<TranslationEngine> {
   const version = releaseVersion;
+  assertEngineAvailable(id);
+  await releasing;
   if (engineId !== id) {
     await engine?.release();
     engine = undefined;
@@ -81,13 +100,17 @@ async function getEngine(id: string, signal?: AbortSignal): Promise<LocalEngine>
   }
   if (version !== releaseVersion) throw new Error('Offline model selection changed.');
   signal?.throwIfAborted();
-  engine ??= new LocalEngine(modelPath(id), getLocalModel(id));
+  engine ??=
+    getLocalModel(id).engine === 'mlx'
+      ? new MlxEngine(modelPath(id), mlxHelperPath())
+      : new LocalEngine(modelPath(id), getLocalModel(id));
   engineId = id;
   return engine;
 }
 export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
   const model = getLocalModel(id);
   assertAvailable();
+  assertEngineAvailable(id);
   controller = new AbortController();
   const state = status(id);
   Object.assign(state, { phase: 'downloading', error: '', bytes: 0 });
@@ -131,13 +154,16 @@ export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
   working = true;
   emit();
   try {
+    await releasing;
     if (engineId === id) {
       await engine?.release();
       engine = undefined;
       engineId = undefined;
     }
     verified.delete(id);
-    await rm(modelPath(id), { force: true });
+    const model = getLocalModel(id);
+    // getLocalModel accepts only the fixed registry; never remove a caller-supplied path.
+    await rm(modelPath(id), model.assets ? { recursive: true, force: true } : { force: true });
     Object.assign(state, { phase: 'idle', error: '', bytes: 0 });
   } finally {
     working = false;
@@ -160,7 +186,13 @@ export async function translateLocal(
   Object.assign(state, { phase: 'translating', error: '' });
   emit();
   try {
-    return await (await getEngine(id, signal)).translate(text, primary, secondary, signal, onChunk);
+    const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(90_000)]);
+    return await (
+      await getEngine(id, bounded)
+    ).translate(text, primary, secondary, bounded, onChunk);
+  } catch (cause) {
+    state.error = cause instanceof Error ? cause.message : String(cause);
+    throw cause;
   } finally {
     working = false;
     state.phase = 'ready';
@@ -190,5 +222,14 @@ export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'
 }
 export function releaseLocal(): void {
   releaseVersion++;
-  void engine?.release().then(emit);
+  const previous = engine;
+  engine = undefined;
+  engineId = undefined;
+  releasing = Promise.all([releasing, previous?.release()]).then(() => undefined);
+  // Observe rejection without clearing the barrier: uncertain process shutdown
+  // must never allow a second resident model to be spawned. Restart the app to recover.
+  void releasing.then(emit, () => {
+    console.error('Offline engine shutdown could not be confirmed. Restart the app to recover.');
+    emit();
+  });
 }

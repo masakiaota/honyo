@@ -120,7 +120,8 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
             name: m.name,
             memory: m.memory,
             source: m.url.split('/resolve/')[0],
-            license: m.url.replace('/resolve/', '/blob/').replace(m.file, 'LICENSE.txt'),
+            license:
+              m.licenseUrl ?? m.url.replace('/resolve/', '/blob/').replace(m.file, 'LICENSE.txt'),
           },
         ]),
       ),

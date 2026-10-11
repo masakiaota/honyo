@@ -4,9 +4,11 @@ directories:
   output: dist
 files:
   - build/**/*
+  # Native MLX artifacts live outside asar, and only in macOS packages.
+  - '!build/mlx/**/*'
   - node_modules/**/*
   - package.json
-  - "*.html"
+  - '*.html'
   - assets/setup/**/*
 extraMetadata:
   main: build/main.js
@@ -37,6 +39,18 @@ mac:
     - target: dmg
     - target: zip
   forceCodeSigning: false
+  hardenedRuntime: true
+  # Explicitly sign the nested executable; no JIT entitlement is needed for MLX.
+  binaries:
+    - Contents/Resources/mlx/honyo-mlx
+  extraResources:
+    - from: build/mlx
+      to: mlx
+      filter:
+        - honyo-mlx
+        - '*.dylib'
+        - mlx-swift_Cmlx.bundle/**/*
+        - licenses/**/*
 
 win:
   target: nsis

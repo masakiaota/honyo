@@ -66,6 +66,9 @@ try {
   console.log('Fixing import extensions...');
   await fixImports(buildDir);
   buildMacOSSelectionAnchor();
+  if (process.platform === 'darwin' && process.arch === 'arm64') {
+    execFileSync(process.execPath, [join(rootDir, 'scripts', 'build-mlx.ts')], { stdio: 'inherit' });
+  }
   console.log('Import extensions fixed!');
   await esbuild.build({entryPoints: ['src/ui/model-settings-renderer.ts'], bundle: true, platform: 'browser', format: 'iife', outfile: 'build/ui/model-settings-renderer.js'});
 } catch (error) {
