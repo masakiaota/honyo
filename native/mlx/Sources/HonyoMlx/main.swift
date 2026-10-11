@@ -113,10 +113,12 @@ struct Helper {
             GPU.metallib = metal
             let started = Date()
             let promptTokenizer = try PromptTokenizer(directory: directory)
+            let eosIDs = config["eos_token_id"] as? [Int] ?? (config["eos_token_id"] as? Int).map { [$0] } ?? []
+            try promptTokenizer.validateControlIDs(bos: config["bos_token_id"] as? Int, eos: eosIDs)
             let container = try await LLMModelFactory.shared.loadContainer(
                 from: directory, using: LocalTokenizerLoader(prompt: promptTokenizer))
             emit(["type": "ready", "protocol": 1, "modelType": "hunyuan_v1_dense",
-                  "contextSize": PromptSafety.contextSize, "loadMs": Date().timeIntervalSince(started) * 1000])
+                  "template": promptTokenizer.template, "contextSize": PromptSafety.contextSize, "loadMs": Date().timeIntervalSince(started) * 1000])
             let resident = Resident()
             await container.perform { context in
                 while let line = readLine(strippingNewline: true) {

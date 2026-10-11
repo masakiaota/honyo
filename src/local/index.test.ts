@@ -63,7 +63,7 @@ it('releases the old model before loading another, verifies each and only delete
   expect(fake.events[2]).toContain('load:/test-data/models/Hy-MT2-7B-');
   expect(fake.verify).toHaveBeenLastCalledWith(
     expect.stringContaining('7B'),
-    undefined,
+    expect.any(AbortSignal),
     getLocalModel(LOCAL_7B_MODEL_ID),
   );
   expect(localState(LOCAL_MODEL_ID).total).toBe(1133080448);

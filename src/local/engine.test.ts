@@ -50,6 +50,11 @@ import { LocalEngine } from './engine.ts';
 import { LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, getLocalModel } from './model.ts';
 afterEach(() => {
   vi.clearAllMocks();
+  fake.generate.mockReset();
+  fake.adapt.mockReset();
+  fake.prefill.mockReset();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 it('reuses one context and sequence, retaining only instructions after each request', async () => {
   const engine = new LocalEngine('/model.gguf');
@@ -113,10 +118,11 @@ it('discards a failed prefill, retries with the same weights and waits for prefi
   fake.prefill.mockReturnValueOnce(pending.promise);
   const warmed = engine.warmup();
   await vi.waitFor(() => expect(fake.prefill).toHaveBeenCalledTimes(2));
+  const cancelled = expect(warmed).rejects.toThrow('released');
   const released = engine.release();
   expect(fake.modelDispose).not.toHaveBeenCalled();
   pending.resolve();
-  await Promise.all([warmed, released]);
+  await Promise.all([cancelled, released]);
   expect(fake.load).toHaveBeenCalledOnce();
   expect(fake.create).toHaveBeenCalledTimes(2);
   expect(fake.contextDispose).toHaveBeenCalledTimes(2);
@@ -154,7 +160,7 @@ it('does not start GPU work for an already cancelled request', async () => {
   ).rejects.toThrow();
   expect(fake.load).not.toHaveBeenCalled();
 });
-it('serializes requests and waits for generation before releasing shared state', async () => {
+it('cancels active and queued requests but drains generation before releasing shared state', async () => {
   const engine = new LocalEngine('/model.gguf');
   const pending = Promise.withResolvers<{ response: string; metadata: { stopReason: string } }>();
   fake.generate
@@ -163,16 +169,20 @@ it('serializes requests and waits for generation before releasing shared state',
   const first = engine.translate('Hello', 'Japanese', 'English');
   await vi.waitFor(() => expect(fake.generate).toHaveBeenCalledOnce());
   const second = engine.translate('Hello again', 'Japanese', 'English');
+  const cancellations = [
+    expect(first).rejects.toThrow('released'),
+    expect(second).rejects.toThrow('released'),
+  ];
   const released = engine.release();
   expect(fake.create).toHaveBeenCalledOnce();
   expect(fake.generate).toHaveBeenCalledOnce();
   expect(fake.contextDispose).not.toHaveBeenCalled();
   pending.resolve({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
-  await Promise.all([first, second, released]);
+  await Promise.all([...cancellations, released]);
   expect(fake.create).toHaveBeenCalledOnce();
   expect(fake.contextDispose).toHaveBeenCalledOnce();
-  expect(fake.adapt).toHaveBeenCalledTimes(2);
-  expect(fake.adapt).toHaveBeenCalledBefore(fake.contextDispose);
+  expect(fake.generate).toHaveBeenCalledOnce();
+  expect(fake.adapt).not.toHaveBeenCalled();
 });
 
 it('recovers from cancellation without reloading weights or forwarding late chunks', async () => {
@@ -191,8 +201,8 @@ it('recovers from cancellation without reloading weights or forwarding late chun
     engine.translate('Hello', 'Japanese', 'English', controller.signal, chunks),
   ).rejects.toThrow('Cancelled');
   expect(chunks.mock.calls).toEqual([['こん']]);
+  await vi.waitFor(() => expect(fake.completionDispose).toHaveBeenCalledOnce());
   expect(fake.contextDispose).toHaveBeenCalledOnce();
-  expect(fake.completionDispose).toHaveBeenCalledOnce();
   fake.generate.mockResolvedValueOnce({
     response: 'こんにちは',
     metadata: { stopReason: 'eogToken' },
@@ -268,4 +278,73 @@ it.each([
     expect.stringContaining('Hello <|extra_0|>'),
     expect.objectContaining({ value: end }),
   );
+});
+
+it('counts queue time in the deadline and skips expired work even before the timer fires', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  const pending = Promise.withResolvers<{ response: string; metadata: { stopReason: string } }>();
+  fake.generate.mockReturnValueOnce(pending.promise);
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const first = engine.translate('Hello', 'Japanese', 'English');
+  await vi.waitFor(() => expect(fake.generate).toHaveBeenCalledOnce());
+  const second = engine.translate('Hello again', 'Japanese', 'English');
+  const failures = [
+    expect(first).rejects.toThrow('90 seconds'),
+    expect(second).rejects.toThrow('90 seconds'),
+  ];
+  now = 90_001;
+  pending.resolve({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
+  await Promise.all(failures);
+  expect(fake.generate).toHaveBeenCalledOnce();
+  await engine.release();
+});
+
+it('rejects release uncertainty and never reloads while the in-process GPU drain is unresolved', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  const pending = Promise.withResolvers<{ response: string; metadata: { stopReason: string } }>();
+  fake.generate.mockReturnValueOnce(pending.promise);
+  const first = engine.translate('Hello', 'Japanese', 'English');
+  await vi.waitFor(() => expect(fake.generate).toHaveBeenCalledOnce());
+  const cancelled = expect(first).rejects.toThrow('released');
+  vi.useFakeTimers();
+  const release = engine.release();
+  const uncertain = expect(release).rejects.toThrow('shutdown could not be confirmed');
+  await vi.advanceTimersByTimeAsync(2000);
+  await Promise.all([cancelled, uncertain]);
+  expect(fake.contextDispose).not.toHaveBeenCalled();
+  pending.resolve({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
+  await expect(engine.translate('Next', 'Japanese', 'English')).rejects.toThrow(
+    'shutdown could not be confirmed',
+  );
+  expect(fake.load).toHaveBeenCalledOnce();
+  expect(fake.generate).toHaveBeenCalledOnce();
+});
+
+it('fails closed for already queued and subsequent work if context disposal fails', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  fake.generate.mockResolvedValueOnce({ response: '', metadata: { stopReason: 'eogToken' } });
+  fake.contextDispose.mockRejectedValueOnce(new Error('Dispose failed'));
+  const first = engine.translate('Hello', 'Japanese', 'English');
+  const queued = engine.translate('Next', 'Japanese', 'English');
+  await expect(first).rejects.toThrow('shutdown could not be confirmed');
+  await expect(queued).rejects.toThrow('shutdown could not be confirmed');
+  await expect(engine.translate('Later', 'Japanese', 'English')).rejects.toThrow('Restart the app');
+  expect(fake.create).toHaveBeenCalledOnce();
+  expect(fake.load).toHaveBeenCalledOnce();
+  expect(fake.generate).toHaveBeenCalledOnce();
+  await expect(engine.release()).rejects.toThrow('shutdown could not be confirmed');
+});
+
+it('aborts warmup before model allocation and rejects source echoes', async () => {
+  const engine = new LocalEngine('/model.gguf');
+  const controller = new AbortController();
+  controller.abort(new Error('Cancelled warmup'));
+  await expect(engine.warmup('Japanese', controller.signal)).rejects.toThrow('Cancelled warmup');
+  expect(fake.load).not.toHaveBeenCalled();
+  fake.generate.mockResolvedValueOnce({ response: 'Hello', metadata: { stopReason: 'eogToken' } });
+  await expect(engine.translate('Hello', 'Japanese', 'English')).rejects.toThrow(
+    'valid translation',
+  );
+  await engine.release();
 });

@@ -37,7 +37,9 @@ vi.mock('node:fs', () => ({
   existsSync: (): boolean => fake.helperPresent,
   statSync: (path: string): { size: number } => {
     if (basename(path) === fake.missing) throw new Error('missing');
-    const model = getLocalModel(LOCAL_MLX_7B_MODEL_ID);
+    const model = getLocalModel(
+      path.includes('1.8B-MLX') ? LOCAL_MLX_18_MODEL_ID : LOCAL_MLX_7B_MODEL_ID,
+    );
     return {
       size: model.assets?.find(asset => asset.file === basename(path))?.bytes ?? 4624648896,
     };
@@ -57,8 +59,8 @@ vi.mock('./engine.ts', () => ({
 }));
 vi.mock('./mlx-engine.ts', () => ({
   MlxEngine: class {
-    constructor(path: string, helper: string) {
-      fake.construct(path, helper);
+    constructor(path: string, helper: string, template: string) {
+      fake.construct(path, helper, template);
     }
     warmup = fake.warm;
     release = fake.release;
@@ -66,6 +68,7 @@ vi.mock('./mlx-engine.ts', () => ({
   },
 }));
 import { LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
+import { LOCAL_MLX_18_MODEL_ID } from './mlx-model-18.ts';
 import { getLocalModel, LOCAL_7B_MODEL_ID } from './model.ts';
 import {
   warmLocal,
@@ -97,8 +100,8 @@ it('treats a directory as installed only when every asset has the expected size'
 it('selects resident MLX explicitly, preserves GGUF selection, and passes the dev helper path', async () => {
   await warmLocal(LOCAL_MLX_7B_MODEL_ID, 'English');
   const path = '/test-data/models/' + getLocalModel(LOCAL_MLX_7B_MODEL_ID).file;
-  expect(fake.construct).toHaveBeenCalledWith(path, '/app/build/mlx/honyo-mlx');
-  expect(fake.warm).toHaveBeenCalledWith('English');
+  expect(fake.construct).toHaveBeenCalledWith(path, '/app/build/mlx/honyo-mlx', 'hy7');
+  expect(fake.warm).toHaveBeenCalledWith('English', expect.any(AbortSignal));
   await translateLocal('Hello', 'English', 'Japanese', undefined, undefined, LOCAL_MLX_7B_MODEL_ID);
   expect(fake.construct).toHaveBeenCalledOnce();
   await warmLocal(LOCAL_7B_MODEL_ID);
@@ -110,7 +113,11 @@ it('uses the asar-external packaged helper and removes only the selected MLX dir
   vi.stubGlobal('process', Object.assign(Object.create(process), { resourcesPath: '/resources' }));
   try {
     await warmLocal(LOCAL_MLX_7B_MODEL_ID);
-    expect(fake.construct).toHaveBeenCalledWith(expect.any(String), '/resources/mlx/honyo-mlx');
+    expect(fake.construct).toHaveBeenCalledWith(
+      expect.any(String),
+      '/resources/mlx/honyo-mlx',
+      'hy7',
+    );
     await deleteLocal(LOCAL_MLX_7B_MODEL_ID);
     expect(fake.deleted).toHaveBeenCalledWith(
       '/test-data/models/' + getLocalModel(LOCAL_MLX_7B_MODEL_ID).file,
@@ -138,6 +145,23 @@ it('waits for explicit release before loading again instead of holding two resid
   barrier.resolve();
   await warming;
   expect(fake.gguf).toHaveBeenCalledOnce();
+});
+
+it('loads the pinned 1.8B checkpoint with its own prompt template and verified assets', async () => {
+  expect(localState(LOCAL_MLX_18_MODEL_ID).installed).toBe(true);
+  await warmLocal(LOCAL_MLX_18_MODEL_ID);
+  expect(fake.construct).toHaveBeenCalledWith(
+    '/test-data/models/' + getLocalModel(LOCAL_MLX_18_MODEL_ID).file,
+    '/app/build/mlx/honyo-mlx',
+    'hy18',
+  );
+  expect(fake.verify).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.any(AbortSignal),
+    getLocalModel(LOCAL_MLX_18_MODEL_ID),
+  );
+  fake.missing = 'config.json';
+  expect(localState(LOCAL_MLX_18_MODEL_ID).installed).toBe(false);
 });
 
 it('blocks replacement engines when native shutdown cannot be confirmed', async () => {

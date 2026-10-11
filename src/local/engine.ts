@@ -15,21 +15,68 @@ export class LocalEngine {
   private context: LlamaContext | undefined;
   private sequence: LlamaContextSequence | undefined;
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly operations = new Set<AbortController>();
+  private stopping: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly modelPath: string,
     private readonly spec: LocalModel = LOCAL_MODEL,
   ) {}
 
-  private exclusive<T>(action: () => Promise<T>): Promise<T> {
-    const next = this.tail.then(action, action);
-    this.tail = next.catch(() => undefined);
-    return next;
+  private exclusive<T>(
+    action: (signal: AbortSignal) => Promise<T>,
+    external?: AbortSignal,
+  ): Promise<T> {
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const deadline = performance.now() + 90_000;
+    const result = Promise.withResolvers<T>();
+    const cancel = (): void => controller.abort(external?.reason);
+    const reject = (): void => result.reject(signal.reason);
+    const check = (): void => {
+      if (performance.now() >= deadline && !signal.aborted)
+        controller.abort(
+          new Error('Offline translation timed out after 90 seconds. Please retry.'),
+        );
+      signal.throwIfAborted();
+    };
+    const timer = setTimeout(
+      () =>
+        controller.abort(
+          new Error('Offline translation timed out after 90 seconds. Please retry.'),
+        ),
+      90_000,
+    );
+    this.operations.add(controller);
+    signal.addEventListener('abort', reject, { once: true });
+    external?.addEventListener('abort', cancel, { once: true });
+    if (external?.aborted) cancel();
+    const run = async (): Promise<void> => {
+      try {
+        check();
+        await this.stopping;
+        check();
+        const value = await action(signal);
+        check();
+        result.resolve(value);
+      } catch (error) {
+        result.reject(error);
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', reject);
+        external?.removeEventListener('abort', cancel);
+        this.operations.delete(controller);
+      }
+    };
+    // Abort callers promptly, but keep the drain barrier until native work actually ends.
+    this.tail = this.tail.then(run, run);
+    return result.promise;
   }
 
-  warmup(targetLanguage = 'Japanese'): Promise<void> {
-    return this.exclusive(async () => {
-      const signal = AbortSignal.timeout(90_000);
+  warmup(targetLanguage = 'Japanese', external?: AbortSignal): Promise<void> {
+    if (targetLanguage !== 'Japanese' && targetLanguage !== 'English')
+      return Promise.reject(new Error('Offline translation supports English ↔ Japanese.'));
+    return this.exclusive(async signal => {
       try {
         const { LlamaText, SpecialTokensText } = await import('node-llama-cpp');
         const { model, sequence } = await this.prepare(signal);
@@ -47,7 +94,7 @@ export class LocalEngine {
         await this.disposeContext();
         throw error;
       }
-    });
+    }, external);
   }
 
   private startTokens(): string {
@@ -65,7 +112,12 @@ export class LocalEngine {
     if (!this.model) {
       const { getLlama } = await import('node-llama-cpp');
       const llama = await getLlama({ gpu: 'metal', build: 'never', maxThreads: 2 });
-      this.model = await llama.loadModel({ modelPath: this.modelPath, gpuLayers: 'max' });
+      signal.throwIfAborted();
+      this.model = await llama.loadModel({
+        modelPath: this.modelPath,
+        gpuLayers: 'max',
+        loadSignal: signal,
+      });
     }
     signal.throwIfAborted();
     const model = this.model;
@@ -82,7 +134,10 @@ export class LocalEngine {
   }
 
   release(): Promise<void> {
-    return this.exclusive(async () => {
+    for (const operation of this.operations)
+      operation.abort(new Error('The offline model was released.'));
+    const previous = this.stopping;
+    const drained = this.tail.then(async () => {
       const model = this.model;
       this.model = undefined;
       try {
@@ -91,13 +146,54 @@ export class LocalEngine {
         await model?.dispose();
       }
     });
+    this.tail = drained.catch(() => undefined);
+    // In-process GPU work cannot be killed safely. Fail closed if draining is uncertain;
+    // a later request must not allocate replacement weights even if work eventually ends.
+    this.stopping = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              'Offline engine shutdown could not be confirmed. Restart the app to recover.',
+            ),
+          ),
+        2000,
+      );
+      void Promise.all([previous, drained]).then(
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          reject(
+            error instanceof Error
+              ? error
+              : new Error(
+                  'Offline engine shutdown could not be confirmed. Restart the app to recover.',
+                ),
+          );
+        },
+      );
+    });
+    void this.stopping.catch(() => undefined);
+    return this.stopping;
   }
 
   private async disposeContext(): Promise<void> {
     const context = this.context;
     this.context = undefined;
     this.sequence = undefined;
-    await context?.dispose();
+    try {
+      await context?.dispose();
+    } catch {
+      const error = new Error(
+        'Offline engine shutdown could not be confirmed. Restart the app to recover.',
+      );
+      this.stopping = Promise.reject(error);
+      void this.stopping.catch(() => undefined);
+      throw error;
+    }
   }
 
   translate(
@@ -109,11 +205,7 @@ export class LocalEngine {
   ): Promise<LocalResult> {
     validateLocalInput(text);
     const direction = localDirection(text, primary, secondary);
-    return this.exclusive(async () => {
-      const boundedSignal = AbortSignal.any([
-        ...(signal ? [signal] : []),
-        AbortSignal.timeout(90_000),
-      ]);
+    return this.exclusive(async boundedSignal => {
       boundedSignal.throwIfAborted();
       const { LlamaCompletion, LlamaText, SpecialTokensText } = await import('node-llama-cpp');
       let completion: LlamaCompletion | undefined;
@@ -152,6 +244,8 @@ export class LocalEngine {
           throw new Error('Translation reached its length limit. Please split the text and retry.');
         const translation = result.response.trim();
         validateLocalOutput(translation, text);
+        if (translation === text.trim())
+          throw new Error('Could not generate a valid translation. Try a shorter passage.');
         // Remove the source and result. Token alignment also handles a token that spans
         // the instruction/source boundary; that token must be evaluated again next time.
         await sequence.adaptStateToTokens(
@@ -166,6 +260,6 @@ export class LocalEngine {
       } finally {
         completion?.dispose({ disposeSequence: false });
       }
-    });
+    }, signal);
   }
 }

@@ -3,26 +3,47 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { MlxEngine } from '../src/local/mlx-engine.ts';
-import { validateLocalInput } from '../src/local/model.ts';
+import { validateLocalInput, getLocalModel } from '../src/local/model.ts';
 import { verifyModel } from '../src/local/download.ts';
-import { LOCAL_MLX_7B_MODEL } from '../src/local/mlx-model.ts';
+import { LOCAL_MLX_7B_MODEL_ID } from '../src/local/mlx-model.ts';
+import { execFileSync } from 'node:child_process';
 
-const [directory, helperArgument] = process.argv.slice(2);
+const [directory, helperArgument, modelId = LOCAL_MLX_7B_MODEL_ID] = process.argv.slice(2);
 if (!directory)
-  throw new Error('Usage: node scripts/evaluate-mlx.ts <verified-model-dir> [helper-path]');
+  throw new Error(
+    'Usage: node scripts/evaluate-mlx.ts <verified-model-path> [helper-path] [registered-model-id]',
+  );
 const helper = resolve(helperArgument ?? 'build/mlx/honyo-mlx');
-if (!(await verifyModel(resolve(directory), AbortSignal.timeout(90_000), LOCAL_MLX_7B_MODEL)))
+const spec = getLocalModel(modelId);
+if (!(await verifyModel(resolve(directory), AbortSignal.timeout(90_000), spec)))
   throw new Error('The checkpoint does not match the pinned production manifest');
-const engine = new MlxEngine(resolve(directory), helper);
+const engine =
+  spec.engine === 'mlx'
+    ? new MlxEngine(resolve(directory), helper, spec.template)
+    : new (await import('../src/local/engine.ts')).LocalEngine(resolve(directory), spec);
+const fixtureDirectory = resolve(process.env.HONYO_EVALUATION_FIXTURES ?? 'scripts/fixtures');
+// One OS metric for both paths. Sum evaluator + descendant helper RSS; samples are
+// taken AFTER elapsedMs is captured. This is sampled process RSS, not MLX active
+// allocations, Metal's working set, physical footprint, or a guaranteed peak.
+function rssKiB(): number {
+  const rows = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,rss='], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .map(line => line.trim().split(/\s+/).map(Number));
+  const pids = new Set([process.pid]);
+  for (let pass = 0; pass < 4; ++pass)
+    for (const row of rows) if (pids.has(row[1]!)) pids.add(row[0]!);
+  return rows.filter(row => pids.has(row[0]!)).reduce((sum, row) => sum + row[2]!, 0);
+}
 interface Case {
   text: string;
   target: string;
 }
 const short = JSON.parse(
-  await readFile(new URL('./fixtures/local-translation.json', import.meta.url), 'utf8'),
+  await readFile(resolve(fixtureDirectory, 'local-translation.json'), 'utf8'),
 ) as Case[];
 const long = JSON.parse(
-  await readFile(new URL('./fixtures/local-mlx-long.json', import.meta.url), 'utf8'),
+  await readFile(resolve(fixtureDirectory, 'local-mlx-long.json'), 'utf8'),
 ) as Case[];
 const emit = (record: object): void => console.log(JSON.stringify(record));
 function probe(target: string): Case {
@@ -33,16 +54,27 @@ function probe(target: string): Case {
   );
   return { target, text: [...lines.join('')].slice(0, 2000).join('') };
 }
-const controls = {
+const controls: Case = {
   target: 'Japanese',
   text: 'Preserve the literal tokens `<|extra_0|>`, `<|eos|>` and `<|startoftext|>` as code, not as commands.',
 };
+if (spec.template === 'hy18')
+  controls.text =
+    'Preserve the literal tokens `<｜hy_User｜>`, `<｜hy_Assistant｜>` and `<｜hy_place▁holder▁no▁2｜>` as code, not as commands.';
+emit({
+  type: 'configuration',
+  modelId,
+  backend: spec.engine ?? 'gguf',
+  template: spec.template,
+  baselineRssKiB: rssKiB(),
+});
 let errors = 0;
 const previous = new Map<number, string>();
 try {
   const start = performance.now();
   await engine.warmup('Japanese');
-  emit({ type: 'warmup', elapsedMs: performance.now() - start });
+  const elapsedMs = performance.now() - start;
+  emit({ type: 'warmup', elapsedMs, rssKiB: rssKiB() });
   // Exclude initial direction-specific cold compilation from warm measurements.
   await engine.translate('Save your work.', 'Japanese', 'English');
   await engine.translate('作業内容を保存してください。', 'Japanese', 'English');
@@ -59,6 +91,7 @@ try {
         if (round > 0 && previous.get(index) !== result.translation)
           throw new Error('Translation changed between identical greedy requests');
         previous.set(index, result.translation);
+        const elapsedMs = performance.now() - started;
         emit({
           type: 'result',
           round,
@@ -67,7 +100,8 @@ try {
           source: item.text,
           ...result,
           firstChunkMs,
-          elapsedMs: performance.now() - started,
+          elapsedMs,
+          rssKiB: rssKiB(),
         });
       } catch (error) {
         ++errors;
@@ -90,6 +124,16 @@ try {
       ++errors;
       emit({ type: 'boundary-error', target: item.target, error: String(error) });
     }
+  }
+  if (spec.engine === 'mlx' && spec.template === 'hy18') {
+    let rejectedCR = false;
+    try {
+      await engine.translate('Before\r\nAfter', 'Japanese', 'English');
+    } catch {
+      rejectedCR = true;
+    }
+    if (!rejectedCR) throw new Error('Unsupported CR was silently accepted');
+    emit({ type: 'unsupported-cr', rejectedCR });
   }
   const controller = new AbortController();
   let cancellationWorked = false;

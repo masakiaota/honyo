@@ -1,4 +1,5 @@
 import { CUSTOM_MODEL_ID } from '../models.ts';
+import { LOCAL_FAMILIES, recommendedLocalModel, type LocalFamily } from '../local/catalog.ts';
 import type { ModelDraft } from '../model-selection.ts';
 import type {
   AIModelInfo,
@@ -24,7 +25,15 @@ import type { LocalState } from '../local/index.ts';
     custom: { provider: AIProvider; model: string } | null;
     local: Record<
       string,
-      LocalState & { name: string; memory: string; source: string; license: string }
+      LocalState & {
+        name: string;
+        memory: string;
+        source: string;
+        license: string;
+        family: LocalFamily;
+        backend: string;
+        recommended: boolean;
+      }
     >;
     busy: boolean;
     account: { status: string; error?: string };
@@ -203,10 +212,15 @@ import type { LocalState } from '../local/index.ts';
       $<HTMLButtonElement>(id).disabled = locked;
     const select = $<HTMLSelectElement>('model-choice');
     select.replaceChildren(new Option('Choose a model…', ''));
-    for (const model of state.models.filter(m => m.provider === draft?.provider))
-      select.add(new Option(model.name, model.id));
+    if (draft.provider === 'local') {
+      for (const family of LOCAL_FAMILIES) select.add(new Option(family.name, family.id));
+    } else {
+      for (const model of state.models.filter(m => m.provider === draft?.provider))
+        select.add(new Option(model.name, model.id));
+    }
     if (api) select.add(new Option('Enter a model ID…', CUSTOM_MODEL_ID));
-    select.value = draft.modelId;
+    select.value =
+      draft.provider === 'local' ? (state.local[draft.modelId]?.family ?? '') : draft.modelId;
     select.disabled = locked;
     $('custom-model-field').hidden = draft.modelId !== CUSTOM_MODEL_ID;
     $<HTMLInputElement>('manual-model-id').value = draft.customModel;
@@ -219,7 +233,22 @@ import type { LocalState } from '../local/index.ts';
         ? (state.local[draft.modelId]?.memory ?? '')
         : 'Only models from this provider are shown.';
     const local = state.local[draft.modelId];
+    $('local-runtime-options').hidden = draft.provider !== 'local' || !local;
     if (draft.provider === 'local' && local) {
+      $('local-runtime-summary').textContent =
+        `Runtime: ${local.backend}${local.recommended ? ' · Recommended' : ''}`;
+      const runtime = $<HTMLSelectElement>('local-runtime-choice');
+      runtime.replaceChildren();
+      for (const entry of Object.values(state.local).filter(item => item.family === local.family)) {
+        runtime.add(
+          new Option(
+            `${entry.backend}${entry.recommended ? ' · Recommended' : ''}${entry.installed ? ' · Downloaded' : ''}`,
+            entry.id,
+          ),
+        );
+      }
+      runtime.value = draft.modelId;
+      runtime.disabled = locked;
       const downloading = ['downloading', 'verifying'].includes(local.phase);
       const percent = Math.min(100, Math.round((local.bytes / local.total) * 100));
       $('model-download-status').textContent = downloading
@@ -326,7 +355,14 @@ import type { LocalState } from '../local/index.ts';
       return response.ok;
     },
   };
-  $('model-choice').onchange = (): void => selectModel($<HTMLSelectElement>('model-choice').value);
+  $('model-choice').onchange = (): void => {
+    const value = $<HTMLSelectElement>('model-choice').value;
+    if (draft?.provider === 'local') {
+      if (value === 'hy18' || value === 'hy7') selectModel(recommendedLocalModel(value));
+    } else selectModel(value);
+  };
+  $('local-runtime-choice').onchange = (): void =>
+    selectModel($<HTMLSelectElement>('local-runtime-choice').value);
   $('manual-model-id').oninput = (): void => {
     if (draft) draft.customModel = $<HTMLInputElement>('manual-model-id').value;
     render();

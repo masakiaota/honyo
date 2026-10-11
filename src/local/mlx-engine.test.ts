@@ -70,8 +70,8 @@ class Helper extends EventEmitter {
 
 let children: Helper[];
 let engines: MlxEngine[];
-function engine(): MlxEngine {
-  const value = new MlxEngine('/model path', '/native helper');
+function engine(template?: 'hy18' | 'hy7'): MlxEngine {
+  const value = new MlxEngine('/model path', '/native helper', template);
   engines.push(value);
   return value;
 }
@@ -686,4 +686,51 @@ it('discards state when a streaming consumer throws', async () => {
   current.helper.frame({ type: 'chunk', id: current.request.id, text: 'こん' });
   await rejected;
   expect(current.helper.kill).toHaveBeenCalledWith('SIGTERM');
+});
+
+it.each(['hy18', 'hy7'] as const)(
+  'validates the ready template and fixed context for %s',
+  async template => {
+    fake.spawn.mockImplementation(() => {
+      const helper = new Helper();
+      children.push(helper);
+      queueMicrotask(() => helper.frame({ ...READY, template, contextSize: 4096 }));
+      return helper;
+    });
+    const value = engine(template);
+    const warm = value.warmup();
+    await tick();
+    child().result(child().request());
+    await warm;
+  },
+);
+
+it.each([{ template: 'hy7', contextSize: 4096 }, { template: 'hy18', contextSize: 2048 }, {}])(
+  'rejects incompatible ready metadata %j',
+  async metadata => {
+    fake.spawn.mockImplementation(() => {
+      const helper = new Helper();
+      children.push(helper);
+      queueMicrotask(() => helper.frame({ ...READY, ...metadata }));
+      return helper;
+    });
+    await expect(engine('hy18').warmup()).rejects.toThrow('protocol');
+    expect(child().requests).toHaveLength(0);
+  },
+);
+
+it('rejects CR for the pinned 1.8B checkpoint before spawning, without silently normalizing it', () => {
+  expect(() => engine('hy18').translate('Before\r\nAfter', 'Japanese', 'English')).toThrow(
+    'CR line endings',
+  );
+  expect(fake.spawn).not.toHaveBeenCalled();
+});
+
+it('cancels warmup before startup and accepts only supported target languages', async () => {
+  const value = engine();
+  const controller = new AbortController();
+  controller.abort(new Error('Cancelled warmup'));
+  await expect(value.warmup('Japanese', controller.signal)).rejects.toThrow('Cancelled warmup');
+  await expect(value.warmup('French')).rejects.toThrow('English ↔ Japanese');
+  expect(fake.spawn).not.toHaveBeenCalled();
 });

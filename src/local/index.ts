@@ -18,6 +18,7 @@ let engineId: string | undefined;
 let releasing: Promise<void> = Promise.resolve();
 const verified = new Set<string>();
 let working = false;
+let operationController: AbortController | undefined;
 let releaseVersion = 0;
 const progress = new Map<string, { phase: string; bytes: number; error: string }>();
 const listeners = new Set<() => void>();
@@ -102,7 +103,7 @@ async function getEngine(id: string, signal?: AbortSignal): Promise<TranslationE
   signal?.throwIfAborted();
   engine ??=
     getLocalModel(id).engine === 'mlx'
-      ? new MlxEngine(modelPath(id), mlxHelperPath())
+      ? new MlxEngine(modelPath(id), mlxHelperPath(), getLocalModel(id).template)
       : new LocalEngine(modelPath(id), getLocalModel(id));
   engineId = id;
   return engine;
@@ -183,10 +184,15 @@ export async function translateLocal(
   if (!localState(id).installed)
     throw new Error('Download this model in Settings → Offline Translation.');
   working = true;
+  operationController = new AbortController();
   Object.assign(state, { phase: 'translating', error: '' });
   emit();
   try {
-    const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(90_000)]);
+    const bounded = AbortSignal.any([
+      operationController.signal,
+      ...(signal ? [signal] : []),
+      AbortSignal.timeout(90_000),
+    ]);
     return await (
       await getEngine(id, bounded)
     ).translate(text, primary, secondary, bounded, onChunk);
@@ -196,6 +202,7 @@ export async function translateLocal(
   } finally {
     working = false;
     state.phase = 'ready';
+    operationController = undefined;
     emit();
   }
 }
@@ -207,21 +214,25 @@ export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'
   const state = status(id);
   if (!localSupported || !localState(id).installed || working || controller) return;
   working = true;
+  operationController = new AbortController();
   Object.assign(state, { phase: 'loading', error: '' });
   emit();
   try {
-    await (await getEngine(id)).warmup(targetLanguage);
+    const bounded = AbortSignal.any([operationController.signal, AbortSignal.timeout(90_000)]);
+    await (await getEngine(id, bounded)).warmup(targetLanguage, bounded);
     state.phase = 'ready';
   } catch (cause) {
     state.error = cause instanceof Error ? cause.message : String(cause);
     state.phase = 'idle';
   } finally {
     working = false;
+    operationController = undefined;
     emit();
   }
 }
 export function releaseLocal(): void {
   releaseVersion++;
+  operationController?.abort(new Error('The offline model was released.'));
   const previous = engine;
   engine = undefined;
   engineId = undefined;

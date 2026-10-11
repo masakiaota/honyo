@@ -1,10 +1,10 @@
-# 7B MLXオフライン翻訳
+# 両モデルのMLXオフライン翻訳
 
 ## 目的と採用範囲
 
-Apple Silicon Macの7B翻訳を、常駐モデルの応答速度とメモリの両面から改善する。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。
+Apple Silicon Macの1.8Bと7B翻訳について、常駐モデルの応答速度と安全な運用を改善する。7Bで検証したメモリ指標と1.8Bの採否判断は分けて扱う。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。
 
-設定に **Hy-MT2 7B · MLX · Offline** を追加した。既存の1.8Bおよび7B Q4 GGUF、選択済みモデル、ダウンロード済みモデルは変更しない。GGUFは引き続きnode-llama-cpp/llama.cpp Metalで動く。MLXに自動移行せず、利用者が明示的に選ぶ。
+設定にはモデルのサイズを表示し、詳細設定でGGUF/MLXを選ぶ。7BはMLXを推奨し、1.8Bは既存GGUFを推奨する。1.8B MLXも実装・実測したが、品質とCR入力の制限によりExperimental, LF-onlyとする。詳細は[両モデルの検証](local-dual-runtime-validation.md)を参照する。既存の1.8Bおよび7B Q4 GGUF、選択済みモデル、ダウンロード済みモデルは変更しない。GGUFは引き続きnode-llama-cpp/llama.cpp Metalで動く。MLXに自動移行せず、利用者が明示的に選ぶ。
 
 Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタデータに問題のある第三者Q3チェックポイントを製品へ追加しない。Q3とMLXの研究上の採否は別問題である。
 
@@ -18,7 +18,7 @@ Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタ�
 - 解放時は終了確認後にのみ別モデルを起動する。SIGTERMの後1秒でSIGKILL、さらに終了を確認できなければ置換を拒否し、アプリ再起動を要求する。二重常駐を許さない。
 - stdoutはprotocol専用。Nodeは行長、出力、frame数を制限し、raw helper error、stderr、原文をアプリのエラーやログへ出さない。
 
-モデルは`mlx-community/Hy-MT2-7B-4bit`のrevision `9b7204bdb161490a8ce49ce607c1310cc3fd03ad`。重み、tokenizer、設定、LICENSE等の各assetについてサイズとSHA-256を固定する。全assetの取得・検証後だけ一時ディレクトリから昇格する。破損、不足、中断では不完全モデルを使用せず、別のモデルのファイルを削除しない。モデル選択後の翻訳はネットワークもPythonも不要である。
+7Bモデルは`mlx-community/Hy-MT2-7B-4bit`のrevision `9b7204bdb161490a8ce49ce607c1310cc3fd03ad`。1.8Bの固定revisionと制限は[両モデルの検証](local-dual-runtime-validation.md#tokenizer検証とcrの制限)を参照する。重み、tokenizer、設定、LICENSE等の各assetについてサイズとSHA-256を固定する。全assetの取得・検証後だけ一時ディレクトリから昇格する。破損、不足、中断では不完全モデルを使用せず、別のモデルのファイルを削除しない。モデル選択後の翻訳はネットワークもPythonも不要である。
 
 モデル重みをアプリ配布物へ入れず、従来どおり設定画面から取得する。LICENSEを同じ固定revisionからダウンロードし、設定のライセンスリンクもそのrevisionへ向ける。
 
@@ -26,7 +26,7 @@ Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタ�
 
 `npm run build`はmacOS arm64でアプリビルド後に`npm run build:mlx`を実行する。Swift依存はMLX Swift LM 3.32.3 / swift-transformers 1.3.5とlockfileで固定する。完全なXcode、Swift 6.2以上、Metal Toolchainが開発時に必要である。モデルやPythonの導入はビルドに不要。
 
-生成物は`build/mlx/`。helper、`mlx-swift_Cmlx.bundle/default.metallib`および必要なSwift互換dylibを一緒に扱う。macOSパッケージでは`Contents/Resources/mlx/`へasar外で配置する。helperは実行ファイルの隣のMetalライブラリを明示的に使用し、開発機のDerivedDataへ依存しない。electron-builderにネスト実行ファイルを登録し、開発時生成物にはad-hoc署名を行う。正式配布のDeveloper ID署名・notarizationは既存リリース環境で必要であり、ローカルad-hoc検証と同一視しない。
+生成物は`build/mlx/`。helper、`mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib`および必要なSwift互換dylibを一緒に扱う。macOSパッケージでは`Contents/Resources/mlx/`へasar外で配置する。helperは実行ファイルの隣のMetalライブラリを明示的に使用し、開発機のDerivedDataへ依存しない。electron-builderにネスト実行ファイルを登録し、開発時生成物にはad-hoc署名を行う。正式配布のDeveloper ID署名・notarizationは既存リリース環境で必要であり、ローカルad-hoc検証と同一視しない。
 
 MLX helperのdeployment targetはmacOS 14、アプリのオフライン対象はApple Siliconである。古いmacOSでの実行は別途確認が必要。macOS向け配布物の作成はApple Silicon上で行う。Windows/LinuxのパッケージにはMLX native artifactを同梱しない。
 
@@ -40,11 +40,12 @@ native unit testは`native/mlx`で以下を実行する。
 
     xcodebuild -scheme HonyoMlx -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath ../../output/native-mlx/DerivedData -clonedSourcePackagesDirPath ../../output/native-mlx/SourcePackages -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution ARCHS=arm64 CODE_SIGNING_ALLOWED=NO MACOSX_DEPLOYMENT_TARGET=14.0 test
 
-任意の`TEST_RUNNER_HONYO_MLX_TEST_MODEL=<absolute checkpoint directory>`を指定すると、実チェックポイントの全209特殊表記とUnicode/CRLF/NULのbyte-exact検証も行う。未指定時はそのチェックポイント依存テストだけskipする。
+任意の`TEST_RUNNER_HONYO_MLX_TEST_MODEL=<absolute 7B checkpoint directory>`と`TEST_RUNNER_HONYO_MLX_TEST_MODEL_18=<absolute 1.8B checkpoint directory>`を指定すると、両実チェックポイントの全特殊表記・Unicode/NULのbyte-exact検証、Rust参照ID fixtureとの照合も行う。7BはCRLF保持、1.8BはCRの明示拒否を検査する。未指定時は該当チェックポイント依存テストだけskipする。
 
 製品クライアントの実モデルsmokeは以下で実行する。モデルは明示的に指定し、ユーザー設定やuserDataを変更せず、自動ダウンロードもしない。
 
-    node scripts/evaluate-mlx.ts <verified checkpoint directory> [helper path]
+    npx esbuild scripts/evaluate-mlx.ts --bundle --platform=node --format=esm --packages=external --outfile=output/native-mlx/dual-model/evaluate-local.mjs
+    node output/native-mlx/dual-model/evaluate-local.mjs <verified model path> [helper path] [registered model ID]
 
 短文20例・長文4例を2巡し、英日両方向の2000文字境界、特殊表記のコード保存、生成中の中断と次要求の復旧を確認する。出力JSONLにはfixtureの原文・訳文を含むため、ローカル評価用とし、利用者のコピー内容を投入して共有しない。
 

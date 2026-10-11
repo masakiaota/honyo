@@ -74,16 +74,18 @@ export class MlxEngine {
 
   private readonly modelPath: string;
   private readonly helperPath: string;
+  private readonly template: 'hy18' | 'hy7' | undefined;
 
-  constructor(modelPath: string, helperPath: string) {
+  constructor(modelPath: string, helperPath: string, template?: 'hy18' | 'hy7') {
     this.modelPath = modelPath;
     this.helperPath = helperPath;
+    this.template = template;
   }
 
-  warmup(target = 'Japanese'): Promise<void> {
+  warmup(target = 'Japanese', signal?: AbortSignal): Promise<void> {
     if (target !== 'Japanese' && target !== 'English')
       return Promise.reject(new Error('Offline translation supports English ↔ Japanese.'));
-    return this.enqueue('warmup', target).then(() => undefined);
+    return this.enqueue('warmup', target, undefined, signal).then(() => undefined);
   }
 
   translate(
@@ -94,6 +96,10 @@ export class MlxEngine {
     onChunk?: (text: string) => void,
   ): Promise<LocalResult> {
     validateLocalInput(text);
+    if (this.template === 'hy18' && text.includes('\r'))
+      throw new Error(
+        'This 1.8B MLX checkpoint cannot preserve CR line endings. Select GGUF or supply LF-only text.',
+      );
     const direction = localDirection(text, primary, secondary);
     return this.enqueue('translate', direction.targetLanguage, text, signal, onChunk).then(
       translation => ({ translation, ...direction }),
@@ -315,6 +321,8 @@ export class MlxEngine {
       if (frame.type === 'startup-error' && typeof frame.error === 'string' && frame.error.trim())
         throw new Error('The native MLX helper could not load the offline model.');
       if (frame.type !== 'ready' || frame.protocol !== 1 || frame.modelType !== 'hunyuan_v1_dense')
+        throw protocolError();
+      if (this.template && (frame.template !== this.template || frame.contextSize !== 4096))
         throw protocolError();
       helper.isReady = true;
       helper.resolveReady();

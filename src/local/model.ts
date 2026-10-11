@@ -1,4 +1,5 @@
 import { LOCAL_MLX_7B_MODEL, LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
+import { LOCAL_MLX_18_MODEL, LOCAL_MLX_18_MODEL_ID } from './mlx-model-18.ts';
 
 export const LOCAL_MODEL_ID = 'local-hy-mt-1.8b';
 export interface LocalModelAsset {
@@ -31,6 +32,7 @@ export const LOCAL_MODEL: LocalModel = {
 export const LOCAL_7B_MODEL_ID = 'local-hy-mt2-7b-q4';
 export const LOCAL_MODELS: Record<string, LocalModel> = {
   [LOCAL_MODEL_ID]: LOCAL_MODEL,
+  [LOCAL_MLX_18_MODEL_ID]: LOCAL_MLX_18_MODEL,
   [LOCAL_MLX_7B_MODEL_ID]: LOCAL_MLX_7B_MODEL,
   [LOCAL_7B_MODEL_ID]: {
     name: 'Hy-MT2 7B · Offline',
