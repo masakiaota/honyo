@@ -41,11 +41,11 @@ This fork currently has no packaged releases. Build and run it from this reposit
 
 Install Git, **Node.js 23.6.0 or newer**, and npm. Native modules also need the tools below; see the [node-gyp installation guide](https://github.com/nodejs/node-gyp#installation) for setup details.
 
-| Platform | Native build tools                                                                                                                |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| macOS    | Python 3 and Xcode Command Line Tools (`xcode-select --install`). Your Node.js installation must include its development headers. |
-| Windows  | Python 3 and Visual Studio 2022 with the **Desktop development with C++** workload.                                               |
-| Linux    | Python 3, `make`, a C/C++ compiler, and X11 development libraries.                                                                |
+| Platform | Native build tools                                                                                                                                                                                        |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS    | Python 3 and Xcode Command Line Tools for Node native modules; full Xcode with Swift 6.2+ and Metal Toolchain on Apple Silicon for the bundled MLX helper. Node.js development headers are also required. |
+| Windows  | Python 3 and Visual Studio 2022 with the **Desktop development with C++** workload.                                                                                                                       |
+| Linux    | Python 3, `make`, a C/C++ compiler, and X11 development libraries.                                                                                                                                        |
 
 <details>
 <summary>Debian/Ubuntu build dependencies</summary>
@@ -81,7 +81,9 @@ On macOS, allow the app under **System Settings → Privacy & Security → Acces
 2. Once the download is verified, select **Use this model**. This selects English ↔ Japanese and popup display immediately.
 3. Try the sample text in Settings, or select text anywhere and double-copy as usual.
 
-Honyo uses **Hy-MT2 1.8B Q4_K_M** with llama.cpp and Metal. Model weights stay in memory while selected and preload when Honyo starts. Switching to a cloud model or deleting the offline model releases them. Each request has its own context, a 2,000-character input limit and a 90-second generation deadline. CPU evaluation uses at most two threads; only one local translation runs at once.
+The default **Hy-MT2 1.8B Q4_K_M** and optional **7B Q4_K_M** use llama.cpp and Metal. **Hy-MT2 7B · MLX · Offline** is an additional, explicitly selected 4-bit option using the bundled native Swift MLX helper (about 4.24 GB download; 16 GB RAM or more recommended). Existing models and selections are not migrated. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
+
+Model weights stay resident while selected and preload when Honyo starts; there is no idle unload. Switching to a cloud model or deleting the offline model releases them. The fixed 4,096-token context reuses only the instruction prefix between successful requests, not previous source text or translations. Each request has a 2,000-character input limit and a 90-second deadline. GGUF CPU evaluation uses at most two threads; only one local translation runs at once.
 
 Models are saved under `~/Library/Application Support/Honyo/models`, outside Git and the application bundle. Downloads use a pinned revision and SHA-256 verification. You can cancel or retry downloads and delete the model in Settings. Interrupted downloads restart from the beginning. No Python installation, model conversion or external inference server is needed.
 

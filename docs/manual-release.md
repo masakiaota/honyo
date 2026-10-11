@@ -4,7 +4,7 @@
 
 ## 1. 公開対象の取得
 
-このリポジトリ内から、以下を同じシェルで順に実行する。Node.js 24、Xcode Command Line Tools、認証済みの `gh` が必要だ。いずれかのコマンドが失敗したら、公開へ進まず原因を解消する。
+このリポジトリ内から、以下を同じシェルで順に実行する。Node.js 24、Node.jsの開発ヘッダー、Swift 6.2以上を含む完全なXcodeとMetal Toolchain、認証済みの `gh` が必要だ（Command Line ToolsだけではMLX helperをビルドできない）。MLXの構成と検証方法は[実装ガイド](local-mlx-runtime.md)を参照する。いずれかのコマンドが失敗したら、公開へ進まず原因を解消する。
 
 ```bash
 set -e

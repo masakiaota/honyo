@@ -1,4 +1,12 @@
+import { LOCAL_MLX_7B_MODEL, LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
+
 export const LOCAL_MODEL_ID = 'local-hy-mt-1.8b';
+export interface LocalModelAsset {
+  file: string;
+  bytes: number;
+  sha256: string;
+  url: string;
+}
 export interface LocalModel {
   name: string;
   file: string;
@@ -7,6 +15,9 @@ export interface LocalModel {
   url: string;
   memory: string;
   template: 'hy18' | 'hy7';
+  engine?: 'mlx';
+  assets?: readonly LocalModelAsset[];
+  licenseUrl?: string;
 }
 export const LOCAL_MODEL: LocalModel = {
   name: 'Hy-MT2 1.8B · Offline',
@@ -20,6 +31,7 @@ export const LOCAL_MODEL: LocalModel = {
 export const LOCAL_7B_MODEL_ID = 'local-hy-mt2-7b-q4';
 export const LOCAL_MODELS: Record<string, LocalModel> = {
   [LOCAL_MODEL_ID]: LOCAL_MODEL,
+  [LOCAL_MLX_7B_MODEL_ID]: LOCAL_MLX_7B_MODEL,
   [LOCAL_7B_MODEL_ID]: {
     name: 'Hy-MT2 7B · Offline',
     file: 'Hy-MT2-7B-Q4_K_M.gguf',

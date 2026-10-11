@@ -1,0 +1,13 @@
+Swift runtime and Swift back-deployment compatibility libraries
+
+Copyright (c) the Swift project authors and contributors.
+Licensed under the Apache License, Version 2.0, with Runtime Library Exception.
+The complete upstream license and exception are in the sibling LICENSE.txt.
+
+License source: https://raw.githubusercontent.com/swiftlang/swift/main/LICENSE.txt
+Runtime source project: https://github.com/swiftlang/swift
+
+This distribution may include libswift*.dylib compatibility libraries copied
+without modification from the selected Apple Xcode Swift toolchain. The build
+records the compiler version and names of the included libraries in toolchain.txt.
+No Swift toolchain or library downloads occur at application runtime.

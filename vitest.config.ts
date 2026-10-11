@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { devNull } from 'node:os';
 
 export default defineConfig({
@@ -6,15 +6,11 @@ export default defineConfig({
     outputFile: { blob: devNull },
     globals: true,
     environment: 'node',
+    exclude: [...configDefaults.exclude, 'output/**', 'native/**'],
     includeSource: ['src/**/*.{js,ts}'],
     coverage: {
       reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'src/**/*.d.ts',
-        'src/**/*.test.ts',
-        'src/**/*.spec.ts',
-      ],
+      exclude: ['node_modules/', 'src/**/*.d.ts', 'src/**/*.test.ts', 'src/**/*.spec.ts'],
     },
   },
   resolve: {

@@ -19,3 +19,6 @@ output/playwright/
 # Model comparison outputs (existing tracked files are unaffected)
 /docs/evaluation/
 /output/model-evaluation/
+/output/native-mlx/
+/native/mlx/.build/
+/native/mlx/.swiftpm/

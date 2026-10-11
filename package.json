@@ -21,6 +21,7 @@
     "test:ui": "vitest --ui --api.host 127.0.0.1",
     "test:coverage": "vitest --coverage",
     "build": "node scripts/build.ts",
+    "build:mlx": "node scripts/build-mlx.ts",
     "build:icons": "node scripts/make-icons.ts",
     "package": "electron-builder",
     "dist": "npm run build && npm run package",
