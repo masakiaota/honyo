@@ -17,11 +17,15 @@ const fake = vi.hoisted(() => {
     pending: undefined as Promise<void> | undefined,
   };
 });
-vi.mock('electron', () => ({ app: { getPath: (): string => '/test-data' } }));
+vi.mock('electron', () => ({
+  app: { getPath: (): string => '/test-data', getAppPath: (): string => '/app' },
+}));
 vi.mock('node:fs', () => ({
   existsSync: (): boolean => true,
   statSync: (path: string): { size: number } => ({
-    size: path.includes('7B') ? 4624648896 : 1133080448,
+    size:
+      getLocalModel(LOCAL_MLX_7B_MODEL_ID).assets?.find(asset => path.endsWith('/' + asset.file))
+        ?.bytes ?? 1133080448,
   }),
 }));
 vi.mock('node:fs/promises', () => ({ rm: fake.deleted }));
@@ -44,18 +48,22 @@ vi.mock('./engine.ts', () => ({
     }
   },
 }));
+vi.mock('./mlx-engine.ts', async () => ({
+  MlxEngine: (await import('./engine.ts')).LocalEngine,
+}));
 import { warmLocal, deleteLocal, localState, releaseLocal } from './index.ts';
-import { LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, getLocalModel } from './model.ts';
+import { LOCAL_MODEL_ID, getLocalModel } from './model.ts';
+import { LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
 Object.defineProperties(process, fake.descriptors);
 
 it('releases the old model before loading another, verifies each and only deletes the requested file', async () => {
   await warmLocal(LOCAL_MODEL_ID);
   const pending = Promise.withResolvers<void>();
   fake.pending = pending.promise;
-  const switching = warmLocal(LOCAL_7B_MODEL_ID, 'English');
+  const switching = warmLocal(LOCAL_MLX_7B_MODEL_ID, 'English');
   await vi.waitFor(() => expect(fake.events).toHaveLength(2));
   expect(fake.events[1]).toContain('release:');
-  expect(localState(LOCAL_7B_MODEL_ID).busy).toBe(true);
+  expect(localState(LOCAL_MLX_7B_MODEL_ID).busy).toBe(true);
   await expect(deleteLocal(LOCAL_MODEL_ID)).rejects.toThrow('busy');
   pending.resolve();
   await switching;
@@ -64,17 +72,17 @@ it('releases the old model before loading another, verifies each and only delete
   expect(fake.verify).toHaveBeenLastCalledWith(
     expect.stringContaining('7B'),
     undefined,
-    getLocalModel(LOCAL_7B_MODEL_ID),
+    getLocalModel(LOCAL_MLX_7B_MODEL_ID),
   );
   expect(localState(LOCAL_MODEL_ID).total).toBe(1133080448);
-  expect(localState(LOCAL_7B_MODEL_ID).total).toBe(4624648896);
+  expect(localState(LOCAL_MLX_7B_MODEL_ID).total).toBe(getLocalModel(LOCAL_MLX_7B_MODEL_ID).bytes);
   const before = fake.events.length;
   await deleteLocal(LOCAL_MODEL_ID);
   expect(fake.events).toHaveLength(before);
   expect(fake.deleted).toHaveBeenCalledWith('/test-data/models/Hy-MT2-1.8B-Q4_K_M.gguf', {
     force: true,
   });
-  await deleteLocal(LOCAL_7B_MODEL_ID);
+  await deleteLocal(LOCAL_MLX_7B_MODEL_ID);
   expect(fake.events.at(-1)).toContain('release:/test-data/models/Hy-MT2-7B-');
   const verification = Promise.withResolvers<boolean>();
   fake.verify.mockReturnValueOnce(verification.promise);

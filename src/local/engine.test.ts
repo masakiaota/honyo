@@ -47,7 +47,7 @@ vi.mock('node-llama-cpp', () => {
   };
 });
 import { LocalEngine } from './engine.ts';
-import { LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, getLocalModel } from './model.ts';
+import { LOCAL_MODEL_ID, getLocalModel } from './model.ts';
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -79,7 +79,7 @@ it('reuses one context and sequence, retaining only instructions after each requ
   expect(fake.load).toHaveBeenCalledTimes(2);
   expect(fake.create).toHaveBeenCalledTimes(2);
 });
-it.each([LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID])(
+it.each([LOCAL_MODEL_ID])(
   'prefills only the common instruction for %s and preserves it for the first request',
   async id => {
     const engine = new LocalEngine('/model.gguf', getLocalModel(id));
@@ -253,19 +253,16 @@ it('delivers cumulative chunks before generation finishes', async () => {
   await expect(result).resolves.toHaveProperty('translation', 'こんにちは');
 });
 
-it.each([
-  [LOCAL_MODEL_ID, '<｜hy_begin▁of▁sentence｜><｜hy_User｜>', '<｜hy_Assistant｜>'],
-  [LOCAL_7B_MODEL_ID, '<|startoftext|>', '<|extra_0|>'],
-])('uses the model-specific role tokens for %s', async (id, start, end) => {
+it('uses the 1.8B GGUF role tokens', async () => {
   fake.generate.mockResolvedValue({ response: 'こんにちは', metadata: { stopReason: 'eogToken' } });
-  await new LocalEngine('/model.gguf', getLocalModel(id)).translate(
+  await new LocalEngine('/model.gguf', getLocalModel(LOCAL_MODEL_ID)).translate(
     'Hello <|extra_0|>',
     'Japanese',
     'English',
   );
   expect(fake.text).toHaveBeenCalledWith(
-    expect.objectContaining({ value: start }),
+    expect.objectContaining({ value: '<｜hy_begin▁of▁sentence｜><｜hy_User｜>' }),
     expect.stringContaining('Hello <|extra_0|>'),
-    expect.objectContaining({ value: end }),
+    expect.objectContaining({ value: '<｜hy_Assistant｜>' }),
   );
 });

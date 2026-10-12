@@ -35,8 +35,8 @@ const assets = [
 ] as const;
 
 export const LOCAL_MLX_7B_MODEL: LocalModel = {
-  name: 'Hy-MT2 7B · MLX · Offline',
-  memory: 'About 4.2 GB resident memory · Faster 7B · 16 GB RAM or more recommended',
+  name: 'Hy-MT2 7B · Higher quality',
+  memory: 'About 4.2 GB resident memory · 16 GB RAM or more recommended',
   template: 'hy7',
   engine: 'mlx',
   file: `Hy-MT2-7B-MLX-4bit-${MLX_REVISION.slice(0, 12)}`,

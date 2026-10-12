@@ -43,7 +43,9 @@ describe('getEffectiveMaxInputCharacters', () => {
 
   it('caps offline models at the local hard limit', () => {
     expect(getEffectiveMaxInputCharacters(4096, 'local-hy-mt-1.8b')).toBe(LOCAL_MAX_CHARACTERS);
-    expect(getEffectiveMaxInputCharacters(10000, 'local-hy-mt2-7b-q4')).toBe(LOCAL_MAX_CHARACTERS);
+    expect(getEffectiveMaxInputCharacters(10000, 'local-hy-mt2-7b-mlx-4bit')).toBe(
+      LOCAL_MAX_CHARACTERS,
+    );
   });
 
   it('respects a smaller configured limit even for offline models', () => {

@@ -279,7 +279,8 @@ import type { LocalState } from '../local/index.ts';
     $('model-fast-help').textContent =
       caps?.fast?.description ??
       'Uses the faster service tier. Usage limits or pricing may differ.';
-    $('model-options').hidden = !selected && draft.modelId !== CUSTOM_MODEL_ID;
+    $('model-options').hidden =
+      draft.provider === 'local' || (!selected && draft.modelId !== CUSTOM_MODEL_ID);
     $('model-unsaved').hidden = !dirty();
     $('model-discard').hidden = !dirty();
     $<HTMLButtonElement>('model-discard').disabled = locked;
