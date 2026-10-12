@@ -22,9 +22,15 @@
       "@/*": ["src/*"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "output"
-  ]
+  "include": [
+    "src/**/*.ts",
+    "*.ts",
+    "scripts/build.ts",
+    "scripts/build-mlx.ts",
+    "scripts/evaluate-local.ts",
+    "scripts/evaluate-mlx.ts",
+    "scripts/generate-tray-icons.ts",
+    "scripts/make-icons.ts"
+  ],
+  "exclude": ["node_modules", "dist", "output"]
 }

@@ -1,9 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { LOCAL_MODELS, LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID } from '../local/model.ts';
+import { LOCAL_MODELS, LOCAL_MODEL_ID } from '../local/model.ts';
 import { LOCAL_MLX_7B_MODEL_ID } from '../local/mlx-model.ts';
-import { LOCAL_MLX_18_MODEL_ID } from '../local/mlx-model-18.ts';
-import { localRuntime } from '../local/catalog.ts';
 
 class Element {
   value = '';
@@ -36,7 +34,10 @@ afterEach(() => {
   vi.resetModules();
 });
 
-async function settings(currentId: string): Promise<{
+async function settings(
+  currentId: string,
+  downloaded = [currentId],
+): Promise<{
   elements: Map<string, Element>;
   api: ReturnType<typeof vi.fn>;
   host: { modelSettings: { isDirty(): boolean; save(): Promise<boolean> } };
@@ -75,12 +76,11 @@ async function settings(currentId: string): Promise<{
           name: spec.name,
           memory: spec.memory,
           supported: true,
-          installed: id === currentId,
+          installed: downloaded.includes(id),
           phase: 'ready',
           bytes: 0,
           total: spec.bytes,
           error: '',
-          ...localRuntime(id),
         },
       ]),
     ),
@@ -105,45 +105,81 @@ async function settings(currentId: string): Promise<{
   return { elements, api, host };
 }
 
-it.each(Object.keys(LOCAL_MODELS))(
-  'preserves saved %s without download or silent backend migration',
-  async id => {
-    const { elements, api, host } = await settings(id);
-    expect(elements.get('model-choice')?.value).toBe(localRuntime(id).family);
-    expect(elements.get('local-runtime-choice')?.value).toBe(id);
-    expect(elements.get('local-runtime-choice')?.children).toHaveLength(2);
-    expect(host.modelSettings.isDirty()).toBe(false);
-    expect(api.mock.calls).toEqual([[{ action: 'state' }]]);
-  },
-);
+it.each(Object.keys(LOCAL_MODELS))('shows the saved %s in a single model selector', async id => {
+  const { elements, api, host } = await settings(id);
+  expect(elements.get('model-choice')?.value).toBe(id);
+  expect(elements.get('model-choice')?.children.map(item => item.value)).toEqual([
+    '',
+    LOCAL_MODEL_ID,
+    LOCAL_MLX_7B_MODEL_ID,
+  ]);
+  expect(elements.has('local-runtime-choice')).toBe(false);
+  expect(elements.has('local-runtime-options')).toBe(false);
+  expect(elements.get('model-options')?.hidden).toBe(true);
+  expect(elements.get('model-download-status')?.textContent).toBe('Downloaded · Ready');
+  expect(elements.get('model-download')?.hidden).toBe(true);
+  expect(host.modelSettings.isDirty()).toBe(false);
+  expect(api.mock.calls).toEqual([[{ action: 'state' }]]);
+});
 
-it('separates family choice from advanced runtime and requires explicit download before save', async () => {
+it('selects 7B MLX directly and requires explicit download before save', async () => {
   const { elements, api, host } = await settings(LOCAL_MODEL_ID);
-  const family = elements.get('model-choice');
-  if (!family) throw new Error('Missing family select');
-  family.value = 'hy7';
-  family.onchange?.();
-  expect(elements.get('local-runtime-choice')?.value).toBe(LOCAL_MLX_7B_MODEL_ID);
+  const select = elements.get('model-choice');
+  if (!select) throw new Error('Missing model select');
+  select.value = LOCAL_MLX_7B_MODEL_ID;
+  select.onchange?.();
+  expect(select.value).toBe(LOCAL_MLX_7B_MODEL_ID);
   expect(host.modelSettings.isDirty()).toBe(true);
-  const runtime = elements.get('local-runtime-choice');
-  if (!runtime) throw new Error('Missing runtime select');
-  runtime.value = LOCAL_7B_MODEL_ID;
-  runtime.onchange?.();
-  expect(family.value).toBe('hy7');
+  expect(elements.get('model-download')?.hidden).toBe(false);
   expect(await host.modelSettings.save()).toBe(false);
   expect(api).toHaveBeenCalledOnce();
   elements.get('model-download')?.onclick?.();
-  expect(api).toHaveBeenLastCalledWith({ action: 'install', id: LOCAL_7B_MODEL_ID });
+  expect(api).toHaveBeenLastCalledWith({ action: 'install', id: LOCAL_MLX_7B_MODEL_ID });
 });
 
-it('discloses experimental LF-only 1.8B MLX and leaves lightweight recommendation on GGUF', async () => {
-  const { elements } = await settings(LOCAL_MLX_18_MODEL_ID);
-  expect(elements.get('local-runtime-summary')?.textContent).toContain('Experimental, LF-only');
-  const family = elements.get('model-choice');
-  if (!family) throw new Error('Missing family select');
-  family.value = 'hy7';
-  family.onchange?.();
-  family.value = 'hy18';
-  family.onchange?.();
-  expect(elements.get('local-runtime-choice')?.value).toBe(LOCAL_MODEL_ID);
+it('saves downloaded 7B MLX without a runtime choice or another download', async () => {
+  const { elements, api, host } = await settings(LOCAL_MODEL_ID, [
+    LOCAL_MODEL_ID,
+    LOCAL_MLX_7B_MODEL_ID,
+  ]);
+  const select = elements.get('model-choice');
+  if (!select) throw new Error('Missing model select');
+  select.value = LOCAL_MLX_7B_MODEL_ID;
+  select.onchange?.();
+  expect(await host.modelSettings.save()).toBe(true);
+  expect(api).toHaveBeenLastCalledWith({
+    action: 'save',
+    draft: {
+      provider: 'local',
+      modelId: LOCAL_MLX_7B_MODEL_ID,
+      customModel: '',
+      effort: null,
+      fast: false,
+    },
+  });
+  expect(host.modelSettings.isDirty()).toBe(false);
+  expect(api).toHaveBeenCalledTimes(2);
 });
+
+it('discards a model change without altering the saved selection or downloading', async () => {
+  const { elements, api, host } = await settings(LOCAL_MLX_7B_MODEL_ID);
+  const select = elements.get('model-choice');
+  if (!select) throw new Error('Missing model select');
+  select.value = LOCAL_MODEL_ID;
+  select.onchange?.();
+  expect(host.modelSettings.isDirty()).toBe(true);
+  elements.get('model-discard')?.onclick?.();
+  expect(select.value).toBe(LOCAL_MLX_7B_MODEL_ID);
+  expect(host.modelSettings.isDirty()).toBe(false);
+  expect(api.mock.calls).toEqual([[{ action: 'state' }]]);
+});
+
+it.each(['local-hy-mt2-7b-q4', 'local-hy-mt2-1.8b-mlx-4bit'])(
+  'does not expose removed %s or silently choose another model',
+  async id => {
+    const { elements, api } = await settings(id);
+    expect(elements.get('model-choice')?.children.map(item => item.value)).not.toContain(id);
+    expect(elements.get('local-model-setup')?.hidden).toBe(true);
+    expect(api.mock.calls).toEqual([[{ action: 'state' }]]);
+  },
+);

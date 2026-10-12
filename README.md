@@ -77,11 +77,11 @@ On macOS, allow the app under **System Settings → Privacy & Security → Acces
 
 ### Translate offline (no account)
 
-1. Open **Settings → Offline Translation** and select **Download (1.13 GB)**.
-2. Once the download is verified, select **Use this model**. This selects English ↔ Japanese and popup display immediately.
-3. Try the sample text in Settings, or select text anywhere and double-copy as usual.
+1. Open **Settings → Model → Local / On-device** and choose **Hy-MT2 1.8B · Lightweight** or **Hy-MT2 7B · Higher quality**.
+2. Download the selected model if needed, then select **Save** after verification. Your translation languages and display preferences stay unchanged.
+3. Try a translation in Settings, or select text anywhere and double-copy as usual.
 
-The default **Hy-MT2 1.8B Q4_K_M** and optional **7B Q4_K_M** use llama.cpp and Metal. **Hy-MT2 7B · MLX · Offline** is an additional, explicitly selected 4-bit option using the bundled native Swift MLX helper (about 4.24 GB download; 16 GB RAM or more recommended). Existing models and selections are not migrated. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
+There are exactly two local models: **1.8B** uses GGUF Q4_K_M with llama.cpp and Metal (1.13 GB download), and **7B** uses 4-bit MLX with the bundled native Swift helper (about 4.24 GB download; 16 GB RAM or more recommended). The runtime is fixed for each model; there is no Advanced backend selector, 7B GGUF option, or experimental 1.8B MLX option. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
 
 Model weights stay resident while selected and preload when Honyo starts; there is no idle unload. Switching to a cloud model or deleting the offline model releases them. The fixed 4,096-token context reuses only the instruction prefix between successful requests, not previous source text or translations. Each request has a 2,000-character input limit and a 90-second deadline. GGUF CPU evaluation uses at most two threads; only one local translation runs at once.
 

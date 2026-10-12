@@ -24,7 +24,6 @@ import {
   logoutCodex,
 } from '../codex/index.ts';
 import { isLocalModel, LOCAL_MODELS, localDirection } from '../local/model.ts';
-import { localRuntime } from '../local/catalog.ts';
 import {
   localSupported,
   localState,
@@ -119,7 +118,6 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
           {
             ...localState(id),
             name: m.name,
-            ...localRuntime(id),
             memory: m.memory,
             source: m.url.split('/resolve/')[0],
             license:

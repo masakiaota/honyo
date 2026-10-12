@@ -47,7 +47,7 @@ The reusable prefix contained 51 tokens for 1.8B and 50 for 7B. Direction change
 
 These measurements time the engine call to the first text callback, exclude model loading, and do not measure UI rendering. Decode speed excludes the first output token. Desktop load varied, especially during the 7B run; the figures are a small regression check, not a latency guarantee or evidence of faster decoding. Memory figures are the increase reported by `getVramState().used` after retaining a context, not total application RAM. Removing request tokens does not release the context's reserved buffers; releasing the engine does. No extra model download or disk cache is required.
 
-## Startup instruction prefill
+## Startup instruction prefill (historical GGUF evaluation)
 
 Startup prefills only the common translation instruction for the configured target language. No source text is supplied and no translation is generated during warmup. A direction change still reevaluates the changed instruction on the first request, reusing only the matching prefix.
 
@@ -84,9 +84,9 @@ Model revision and hash for the shipped choice are in `src/local/model.ts`. Nati
 - [Unsloth Qwen3.5 GGUF](https://huggingface.co/unsloth/Qwen3.5-2B-GGUF): evaluation used revision `f6d5376be1edb4d416d56da11e5397a961aca8ae`.
 - [node-llama-cpp Electron guide](https://node-llama-cpp.withcat.ai/guide/electron): native packaging and main-process execution.
 
-## Choosing a local model and runtime
+## Choosing a local model
 
-Settings → Model → Local / On-device offers Hy-MT2 1.8B (Lightweight) and Hy-MT2 7B (Higher quality). Advanced runtime settings separate GGUF and MLX from model size. The recommended paths are 1.8B GGUF Q4_K_M (1.13 GB) and 7B MLX 4-bit; legacy 7B GGUF Q4_K_M (4.62 GB) remains available. 1.8B MLX is explicitly experimental and LF-only, not recommended despite its measured speed advantage. See [dual-runtime validation](local-dual-runtime-validation.md) for performance, semantic regressions and explicit CR rejection. Merely opening saved settings never migrates the backend; downloads and saving remain explicit. Existing 1.8B selections and downloaded files remain compatible. The 7B model uses roughly 5 GiB for inference on the tested M3 Air; 16 GB or more system RAM is recommended. Its source and license links, download status, verification and deletion are model-specific.
+Settings → Model → Local / On-device offers exactly two downloads: Hy-MT2 1.8B (Lightweight), fixed to GGUF Q4_K_M (1.13 GB), and Hy-MT2 7B (Higher quality), fixed to Swift MLX 4-bit (about 4.24 GB). No Advanced runtime selector or alternate backend is exposed. The removed 7B GGUF and experimental 1.8B MLX IDs are not compatibility aliases; users with a removed selection must explicitly select a current model. Downloads and saving remain separate explicit actions. Existing downloaded files are not automatically deleted. See [runtime validation](local-dual-runtime-validation.md) for the adoption decision and historical experiments. For 7B, 16 GB or more system RAM is recommended. Source and license links, download status, verification and deletion are model-specific.
 
 Only one model is resident. Switching releases the previous weights before loading the new ones. Trying an unselected model temporarily replaces the resident model, then restores the selected offline model. Both sizes stream output. The 7B role template differs from 1.8B and is selected by the fixed catalog entry.
 

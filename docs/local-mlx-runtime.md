@@ -1,10 +1,10 @@
-# 両モデルのMLXオフライン翻訳
+# 7B Swift MLXオフライン翻訳
 
 ## 目的と採用範囲
 
-Apple Silicon Macの1.8Bと7B翻訳について、常駐モデルの応答速度と安全な運用を改善する。7Bで検証したメモリ指標と1.8Bの採否判断は分けて扱う。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。
+Apple Silicon Macの7B翻訳について、常駐モデルの応答速度と安全な運用を改善する。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。軽量な1.8Bは既存GGUFを使用する。
 
-設定にはモデルのサイズを表示し、詳細設定でGGUF/MLXを選ぶ。7BはMLXを推奨し、1.8Bは既存GGUFを推奨する。1.8B MLXも実装・実測したが、品質とCR入力の制限によりExperimental, LF-onlyとする。詳細は[両モデルの検証](local-dual-runtime-validation.md)を参照する。既存の1.8Bおよび7B Q4 GGUF、選択済みモデル、ダウンロード済みモデルは変更しない。GGUFは引き続きnode-llama-cpp/llama.cpp Metalで動く。MLXに自動移行せず、利用者が明示的に選ぶ。
+設定のローカルモデルは「1.8B · Lightweight」と「7B · Higher quality」の2つだけである。1.8BはGGUF Q4_K_M、7BはSwift MLX 4-bitに固定し、Advanced/backend選択は設けない。7B GGUFと1.8B MLXの登録・ダウンロード定義は撤去し、旧IDの互換aliasも残さない。旧IDが保存されている場合は現在のモデルを明示選択する。既存の取得済みファイルは自動削除しない。1.8B MLXの実験と不採用理由は[検証記録](local-dual-runtime-validation.md)に残す。GGUFはnode-llama-cpp/llama.cpp Metalで動く。
 
 Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタデータに問題のある第三者Q3チェックポイントを製品へ追加しない。Q3とMLXの研究上の採否は別問題である。
 
@@ -18,7 +18,7 @@ Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタ�
 - 解放時は終了確認後にのみ別モデルを起動する。SIGTERMの後1秒でSIGKILL、さらに終了を確認できなければ置換を拒否し、アプリ再起動を要求する。二重常駐を許さない。
 - stdoutはprotocol専用。Nodeは行長、出力、frame数を制限し、raw helper error、stderr、原文をアプリのエラーやログへ出さない。
 
-7Bモデルは`mlx-community/Hy-MT2-7B-4bit`のrevision `9b7204bdb161490a8ce49ce607c1310cc3fd03ad`。1.8Bの固定revisionと制限は[両モデルの検証](local-dual-runtime-validation.md#tokenizer検証とcrの制限)を参照する。重み、tokenizer、設定、LICENSE等の各assetについてサイズとSHA-256を固定する。全assetの取得・検証後だけ一時ディレクトリから昇格する。破損、不足、中断では不完全モデルを使用せず、別のモデルのファイルを削除しない。モデル選択後の翻訳はネットワークもPythonも不要である。
+7Bモデルは`mlx-community/Hy-MT2-7B-4bit`のrevision `9b7204bdb161490a8ce49ce607c1310cc3fd03ad`。過去の1.8B MLX実験のrevisionと制限は[検証記録](local-dual-runtime-validation.md)を参照する。製品から1.8B MLXを取得する定義はない。重み、tokenizer、設定、LICENSE等の各assetについてサイズとSHA-256を固定する。全assetの取得・検証後だけ一時ディレクトリから昇格する。破損、不足、中断では不完全モデルを使用せず、別のモデルのファイルを削除しない。モデル選択後の翻訳はネットワークもPythonも不要である。
 
 モデル重みをアプリ配布物へ入れず、従来どおり設定画面から取得する。LICENSEを同じ固定revisionからダウンロードし、設定のライセンスリンクもそのrevisionへ向ける。
 
@@ -40,7 +40,7 @@ native unit testは`native/mlx`で以下を実行する。
 
     xcodebuild -scheme HonyoMlx -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath ../../output/native-mlx/DerivedData -clonedSourcePackagesDirPath ../../output/native-mlx/SourcePackages -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution ARCHS=arm64 CODE_SIGNING_ALLOWED=NO MACOSX_DEPLOYMENT_TARGET=14.0 test
 
-任意の`TEST_RUNNER_HONYO_MLX_TEST_MODEL=<absolute 7B checkpoint directory>`と`TEST_RUNNER_HONYO_MLX_TEST_MODEL_18=<absolute 1.8B checkpoint directory>`を指定すると、両実チェックポイントの全特殊表記・Unicode/NULのbyte-exact検証、Rust参照ID fixtureとの照合も行う。7BはCRLF保持、1.8BはCRの明示拒否を検査する。未指定時は該当チェックポイント依存テストだけskipする。
+任意の`TEST_RUNNER_HONYO_MLX_TEST_MODEL=<absolute 7B checkpoint directory>`と`TEST_RUNNER_HONYO_MLX_TEST_MODEL_18=<absolute 1.8B checkpoint directory>`を指定すると、7Bと過去の1.8B実験チェックポイントの全特殊表記・Unicode/NULのbyte-exact検証、Rust参照ID fixtureとの照合も行う。7BはCRLF保持、1.8BはCRの明示拒否を検査する。未指定時は該当チェックポイント依存テストだけskipする。
 
 製品クライアントの実モデルsmokeは以下で実行する。モデルは明示的に指定し、ユーザー設定やuserDataを変更せず、自動ダウンロードもしない。
 

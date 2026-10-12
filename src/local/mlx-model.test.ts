@@ -1,16 +1,26 @@
 import { expect, it } from 'vitest';
-import { getLocalModel, LOCAL_MODEL_ID, LOCAL_7B_MODEL_ID, isLocalModel } from './model.ts';
+import { getLocalModel, LOCAL_MODELS, LOCAL_MODEL_ID, isLocalModel } from './model.ts';
 import { LOCAL_MLX_7B_MODEL_ID, MLX_REVISION } from './mlx-model.ts';
 
-it('adds MLX as an explicit 7B choice without changing legacy models or the default', () => {
+it('offers exactly lightweight 1.8B GGUF and higher-quality 7B MLX', () => {
+  expect(Object.keys(LOCAL_MODELS)).toEqual([LOCAL_MODEL_ID, LOCAL_MLX_7B_MODEL_ID]);
   expect(LOCAL_MODEL_ID).toBe('local-hy-mt-1.8b');
   expect(getLocalModel().file).toBe('Hy-MT2-1.8B-Q4_K_M.gguf');
-  expect(getLocalModel(LOCAL_7B_MODEL_ID).file).toBe('Hy-MT2-7B-Q4_K_M.gguf');
+  expect(getLocalModel().sha256).toBe(
+    'dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699',
+  );
   expect(getLocalModel().engine).toBeUndefined();
-  expect(getLocalModel(LOCAL_7B_MODEL_ID).engine).toBeUndefined();
   expect(isLocalModel(LOCAL_MLX_7B_MODEL_ID)).toBe(true);
   expect(getLocalModel(LOCAL_MLX_7B_MODEL_ID).engine).toBe('mlx');
 });
+
+it.each(['local-hy-mt2-7b-q4', 'local-hy-mt2-1.8b-mlx-4bit'])(
+  'rejects removed model %s instead of keeping a hidden compatibility alias',
+  id => {
+    expect(isLocalModel(id)).toBe(false);
+    expect(() => getLocalModel(id)).toThrow('Unknown offline model');
+  },
+);
 
 it('pins every MLX asset and its license to one revision with individual checksums', () => {
   const model = getLocalModel(LOCAL_MLX_7B_MODEL_ID);
