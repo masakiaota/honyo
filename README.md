@@ -77,11 +77,11 @@ On macOS, allow the app under **System Settings → Privacy & Security → Acces
 
 ### Translate offline (no account)
 
-1. Open **Settings → Offline Translation** and select **Download (1.13 GB)**.
-2. Once the download is verified, select **Use this model**. This selects English ↔ Japanese and popup display immediately.
+1. Open **Settings → Model → Local / On-device**, choose a model and select **Download**.
+2. Once the download is verified, select **Save**. Translation languages and display preferences stay unchanged.
 3. Try the sample text in Settings, or select text anywhere and double-copy as usual.
 
-The default **Hy-MT2 1.8B Q4_K_M** and optional **7B Q4_K_M** use llama.cpp and Metal. **Hy-MT2 7B · MLX · Offline** is an additional, explicitly selected 4-bit option using the bundled native Swift MLX helper (about 4.24 GB download; 16 GB RAM or more recommended). Existing models and selections are not migrated. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
+The two local choices are **Hy-MT2 1.8B · Lightweight** using GGUF Q4_K_M / llama.cpp Metal (1.13 GB download) and **Hy-MT2 7B · Higher quality** using the bundled Swift MLX 4-bit helper (4.24 GB download; 16 GB RAM or more recommended). There is no backend selection. 7B GGUF and 1.8B MLX are not offered; removed IDs have no aliases or automatic migration. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
 
 Model weights stay resident while selected and preload when Honyo starts; there is no idle unload. Switching to a cloud model or deleting the offline model releases them. The fixed 4,096-token context reuses only the instruction prefix between successful requests, not previous source text or translations. Each request has a 2,000-character input limit and a 90-second deadline. GGUF CPU evaluation uses at most two threads; only one local translation runs at once.
 

@@ -4,7 +4,7 @@
 
 Apple Silicon Macの7B翻訳を、常駐モデルの応答速度とメモリの両面から改善する。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。
 
-設定に **Hy-MT2 7B · MLX · Offline** を追加した。既存の1.8Bおよび7B Q4 GGUF、選択済みモデル、ダウンロード済みモデルは変更しない。GGUFは引き続きnode-llama-cpp/llama.cpp Metalで動く。MLXに自動移行せず、利用者が明示的に選ぶ。
+設定のローカルモデルは **Hy-MT2 1.8B · Lightweight**（GGUF Q4_K_M）と **Hy-MT2 7B · Higher quality**（Swift MLX 4-bit）の2つだけである。backend選択は設けず、7B GGUFと1.8B MLXは提供しない。旧IDの互換aliasや自動移行は行わず、既存の取得済みファイルは自動削除しない。
 
 Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタデータに問題のある第三者Q3チェックポイントを製品へ追加しない。Q3とMLXの研究上の採否は別問題である。
 

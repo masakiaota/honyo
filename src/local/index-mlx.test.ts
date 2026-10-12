@@ -39,7 +39,7 @@ vi.mock('node:fs', () => ({
     if (basename(path) === fake.missing) throw new Error('missing');
     const model = getLocalModel(LOCAL_MLX_7B_MODEL_ID);
     return {
-      size: model.assets?.find(asset => asset.file === basename(path))?.bytes ?? 4624648896,
+      size: model.assets?.find(asset => asset.file === basename(path))?.bytes ?? 1133080448,
     };
   },
 }));
@@ -66,7 +66,7 @@ vi.mock('./mlx-engine.ts', () => ({
   },
 }));
 import { LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
-import { getLocalModel, LOCAL_7B_MODEL_ID } from './model.ts';
+import { getLocalModel, LOCAL_MODEL_ID } from './model.ts';
 import {
   warmLocal,
   deleteLocal,
@@ -101,9 +101,9 @@ it('selects resident MLX explicitly, preserves GGUF selection, and passes the de
   expect(fake.warm).toHaveBeenCalledWith('English');
   await translateLocal('Hello', 'English', 'Japanese', undefined, undefined, LOCAL_MLX_7B_MODEL_ID);
   expect(fake.construct).toHaveBeenCalledOnce();
-  await warmLocal(LOCAL_7B_MODEL_ID);
+  await warmLocal(LOCAL_MODEL_ID);
   expect(fake.release).toHaveBeenCalledOnce();
-  expect(fake.gguf).toHaveBeenCalledWith('/test-data/models/Hy-MT2-7B-Q4_K_M.gguf');
+  expect(fake.gguf).toHaveBeenCalledWith('/test-data/models/Hy-MT2-1.8B-Q4_K_M.gguf');
 });
 it('uses the asar-external packaged helper and removes only the selected MLX directory', async () => {
   fake.packaged = true;
@@ -132,7 +132,7 @@ it('waits for explicit release before loading again instead of holding two resid
   const barrier = Promise.withResolvers<void>();
   fake.release.mockReturnValueOnce(barrier.promise);
   releaseLocal();
-  const warming = warmLocal(LOCAL_7B_MODEL_ID);
+  const warming = warmLocal(LOCAL_MODEL_ID);
   await Promise.resolve();
   expect(fake.gguf).not.toHaveBeenCalled();
   barrier.resolve();
@@ -146,9 +146,9 @@ it('blocks replacement engines when native shutdown cannot be confirmed', async 
   try {
     fake.release.mockRejectedValueOnce(new Error('shutdown uncertain'));
     releaseLocal();
-    await warmLocal(LOCAL_7B_MODEL_ID);
+    await warmLocal(LOCAL_MODEL_ID);
     expect(fake.gguf).not.toHaveBeenCalled();
-    expect(localState(LOCAL_7B_MODEL_ID).error).toBe('shutdown uncertain');
+    expect(localState(LOCAL_MODEL_ID).error).toBe('shutdown uncertain');
     expect(log).toHaveBeenCalled();
   } finally {
     log.mockRestore();

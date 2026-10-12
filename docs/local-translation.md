@@ -86,7 +86,7 @@ Model revision and hash for the shipped choice are in `src/local/model.ts`. Nati
 
 ## Choosing the 7B model
 
-Settings → Model → Local / On-device offers Hy-MT2 1.8B Q4_K_M (1.13 GB download) and Hy-MT2 7B Q4_K_M (4.62 GB download). Existing 1.8B selections and downloaded files remain compatible. The 7B model uses roughly 5 GiB for inference on the tested M3 Air; 16 GB or more system RAM is recommended. Its source and license links, download status, verification and deletion are model-specific.
+Settings → Model → Local / On-device offers only Hy-MT2 1.8B GGUF Q4_K_M (1.13 GB download) and Hy-MT2 7B Swift MLX 4-bit (4.24 GB download; 16 GB RAM or more recommended). The backend is fixed for each model; no Advanced selection is shown. 7B GGUF is no longer registered or downloadable, and its old ID has no alias or automatic migration. Existing downloaded files are not automatically deleted. Source and license links, download status, verification and deletion are model-specific.
 
 Only one model is resident. Switching releases the previous weights before loading the new ones. Trying an unselected model temporarily replaces the resident model, then restores the selected offline model. Both sizes stream output. The 7B role template differs from 1.8B and is selected by the fixed catalog entry.
 
