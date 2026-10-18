@@ -317,6 +317,10 @@ export class CodexAppServer {
     );
     child.on('error', error => this.rejectPending(error));
     child.on('exit', () => {
+      // Ignore a superseded process: after a stop/start cycle the old child can
+      // exit once a new one is already installed. Reacting to it would clear the
+      // new session and publish a spurious disconnect.
+      if (this.process !== child) return;
       this.initialized = false;
       this.process = null;
       this.rejectPending(new Error('Codex App Server exited'));

@@ -97,6 +97,8 @@ Offline translations stream into the popup when streaming is enabled in General 
 
 The **(ChatGPT)** suffix identifies models that use your Codex access. Other provider entries use API keys.
 
+Honyo starts the Codex runtime only while it is needed: when a **(ChatGPT)** model is selected or the Model settings window is open. With any other model it stays stopped, so offline and API-key setups keep that memory for the model they use.
+
 ### Connect with an API key
 
 1. Obtain a key from [Anthropic Console](https://console.anthropic.com/), [OpenAI Platform](https://platform.openai.com/api-keys), or [Google AI Studio](https://aistudio.google.com/apikey).
