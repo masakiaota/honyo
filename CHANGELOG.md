@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.7.0](https://github.com/masakiaota/honyo/compare/main-20261005-162529-530ba6e...main) (2026-10-19)
+
+### Features
+
+* add a bundled resident Swift MLX backend for 7B offline translation ([0bb4116](https://github.com/masakiaota/honyo/commit/0bb4116b2704c4283dd2a4306b89323c1536d3d8))
+* offer 1.8B and 7B offline models with a simplified model chooser ([20f0149](https://github.com/masakiaota/honyo/commit/20f0149))
+* prefill the local instruction cache during startup warmup ([06ff932](https://github.com/masakiaota/honyo/commit/06ff932))
+* use a single input character limit with an offline cap ([2d6661d](https://github.com/masakiaota/honyo/commit/2d6661d))
+* start Codex only when a Codex model or the settings window needs it ([c1290b1](https://github.com/masakiaota/honyo/commit/c1290b1))
+
+### Bug Fixes
+
+* count input characters lazily to avoid large allocations ([939b95a](https://github.com/masakiaota/honyo/commit/939b95a))
+* reconcile the Codex runtime on committed model changes ([5b9684c](https://github.com/masakiaota/honyo/commit/5b9684c))
+* release in-flight Codex turns when the server exits ([35d7f04](https://github.com/masakiaota/honyo/commit/35d7f04))
+* harden Codex runtime teardown ([d24ee51](https://github.com/masakiaota/honyo/commit/d24ee51))
+
+### Documentation
+
+* synchronize the Japanese offline setup and model choices ([a80b1e1](https://github.com/masakiaota/honyo/commit/a80b1e1))
+
 ## [0.6.0](https://github.com/rot1024/honyo/compare/v0.5.0...v0.6.0) (2026-07-23)
 
 
