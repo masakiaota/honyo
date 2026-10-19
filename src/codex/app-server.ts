@@ -65,7 +65,7 @@ export class CodexAppServer {
   private starting: Promise<void> | null = null;
   private requestId = 0;
   private pending = new Map<number, PendingRequest>();
-  private activeTurns = new Set<() => void>();
+  private activeTurns = new Set<(reason: string) => void>();
   private listeners = new Set<(notification: CodexNotification) => void>();
   private exitListeners = new Set<() => void>();
 
@@ -250,20 +250,24 @@ export class CodexAppServer {
       }
     });
 
-    const abort = (): void => {
+    // The reason is supplied by whoever gives up on the turn: a user
+    // cancellation, a deliberate stop, or an unexpected server exit read very
+    // differently to the person waiting for the translation.
+    const abort = (reason: string): void => {
       if (completed) return;
       completed = true;
       if (turnId) {
         void this.request('turn/interrupt', { threadId, turnId }).catch(() => undefined);
       }
-      rejectCompletion?.(new Error('Translation cancelled'));
+      rejectCompletion?.(new Error(reason));
     };
+    const onCancel = (): void => abort('Translation cancelled');
     this.activeTurns.add(abort);
-    signal?.addEventListener('abort', abort, { once: true });
+    signal?.addEventListener('abort', onCancel, { once: true });
 
     try {
       if (signal?.aborted) {
-        abort();
+        onCancel();
         return await completion;
       }
       const turnResult = asObject(
@@ -285,7 +289,7 @@ export class CodexAppServer {
       return await completion;
     } finally {
       this.activeTurns.delete(abort);
-      signal?.removeEventListener('abort', abort);
+      signal?.removeEventListener('abort', onCancel);
       unsubscribe();
       void this.request('thread/delete', { threadId }).catch(() => undefined);
     }
@@ -295,7 +299,7 @@ export class CodexAppServer {
     this.initialized = false;
     // Fail in-flight turns instead of leaving them to hang until their own
     // timeout: a deliberate stop must release the callers that await them.
-    this.abortActiveTurns();
+    this.abortActiveTurns('Translation cancelled because Codex was stopped');
     this.output?.close();
     this.output = null;
     this.process?.kill();
@@ -304,8 +308,8 @@ export class CodexAppServer {
   }
 
   /** Reject every in-flight turn so the callers awaiting `completion` resume. */
-  private abortActiveTurns(): void {
-    for (const abort of this.activeTurns) abort();
+  private abortActiveTurns(reason: string): void {
+    for (const abort of this.activeTurns) abort(reason);
     this.activeTurns.clear();
   }
 
@@ -327,20 +331,23 @@ export class CodexAppServer {
     child.stderr.on('data', (output: Buffer) =>
       console.error('Codex App Server:', output.toString()),
     );
-    child.on('error', error => this.rejectPending(error));
-    child.on('exit', () => {
-      // Ignore a superseded process: after a stop/start cycle the old child can
-      // exit once a new one is already installed. Reacting to it would clear the
-      // new session and publish a spurious disconnect.
+    // A failed spawn emits 'error' without 'exit', so a listener is required to
+    // stop it becoming an uncaught exception. Both events share one cleanup,
+    // which ignores a superseded process: after a stop/start cycle the old child
+    // can exit once a new one is already installed, and reacting to it would
+    // clear the session that replaced it and publish a spurious disconnect.
+    const handleTermination = (error: Error): void => {
       if (this.process !== child) return;
       this.initialized = false;
       this.process = null;
-      // An unexpected exit must also release turns whose turn/start already
-      // succeeded; they await `completion`, not a pending RPC.
-      this.abortActiveTurns();
-      this.rejectPending(new Error('Codex App Server exited'));
+      // Release turns whose turn/start already succeeded: they await
+      // `completion`, not a pending RPC.
+      this.abortActiveTurns('Translation interrupted because Codex stopped unexpectedly');
+      this.rejectPending(error);
       for (const listener of this.exitListeners) listener();
-    });
+    };
+    child.on('error', handleTermination);
+    child.on('exit', () => handleTermination(new Error('Codex App Server exited')));
 
     await this.request('initialize', {
       clientInfo: {

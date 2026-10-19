@@ -106,11 +106,19 @@ export function isCodexRequired(): boolean {
 }
 
 async function applyCodexRuntime(): Promise<void> {
-  if (!isCodexRequired()) {
-    shutdownCodex();
-    return;
+  try {
+    if (!isCodexRequired()) {
+      shutdownCodex();
+      return;
+    }
+    await initializeCodex();
+  } catch (error) {
+    // Callers fire this reconcile without awaiting it. Letting it reject would
+    // surface as an unhandled rejection and then as an `uncaughtException`,
+    // which `lifecycle` turns into an app exit, so log it and let the next
+    // reconcile retry instead.
+    console.error('Failed to reconcile the Codex runtime:', error);
   }
-  await initializeCodex();
 }
 
 /**
@@ -120,9 +128,9 @@ async function applyCodexRuntime(): Promise<void> {
  * settle on the latest state.
  */
 export function syncCodexRuntime(): Promise<void> {
-  // Recover from a previous failure as well as from success, so a single bad
-  // reconcile can never wedge every later one.
-  runtimeSync = runtimeSync.then(applyCodexRuntime, applyCodexRuntime);
+  // `applyCodexRuntime` never rejects, so the serialized chain stays fulfilled
+  // and a single bad reconcile can never wedge every later one.
+  runtimeSync = runtimeSync.then(applyCodexRuntime);
   return runtimeSync;
 }
 
