@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCodexModelId, isCodexModelKey, toCodexModels } from './models.ts';
+import { getCodexModelId, isCodexModelKey, shouldRunCodexServer, toCodexModels } from './models.ts';
 
 describe('Codex model catalog', () => {
   it('uses a separate key space so API and ChatGPT models cannot collide', () => {
@@ -27,6 +27,24 @@ describe('Codex model catalog', () => {
     expect(getCodexModelId('codex:gpt-5.6-sol')).toBe('gpt-5.6-sol');
     expect(isCodexModelKey('gpt-5.6-sol')).toBe(false);
     expect(getCodexModelId('codex:')).toBeUndefined();
+  });
+
+  it('keeps the App Server only for a Codex model or an open settings window', () => {
+    for (const model of [
+      'claude-5-sonnet',
+      'gpt-5.6',
+      'gemini-3.6-flash',
+      'hy-mt2-1.8b',
+      'custom-model',
+      '',
+    ])
+      expect(shouldRunCodexServer(model, false)).toBe(false);
+
+    expect(shouldRunCodexServer('codex:gpt-5.6-sol', false)).toBe(true);
+    expect(shouldRunCodexServer('codex:gpt-5.6-sol', true)).toBe(true);
+    // Settings must be able to sign in and list models before any Codex model is
+    // selected.
+    expect(shouldRunCodexServer('claude-5-sonnet', true)).toBe(true);
   });
 
   it('preserves account-specific reasoning and service-tier capabilities', () => {

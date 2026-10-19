@@ -17,7 +17,7 @@ import { CUSTOM_MODEL_ID } from '../models.ts';
 import { getModelInfo, refreshModels } from '../models-remote.ts';
 import { isValidMaxInputCharacters } from '../input-character-limit.ts';
 import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
-import { runCodexText } from '../codex/index.ts';
+import { runCodexText, setCodexSettingsOpen } from '../codex/index.ts';
 import { getCodexModelId } from '../codex/models.ts';
 
 // Get __dirname in both ESM and CommonJS
@@ -105,8 +105,14 @@ export function openSettingsWindow(tab = 'model'): void {
   // rebuilds the tray menu automatically if the list changed.
   void refreshModels();
 
+  // The model settings window is the only place that reaches Codex (sign-in,
+  // account status, catalog, previews), so keep the App Server available while
+  // it is open. On close it stops again unless a Codex model stays selected.
+  setCodexSettingsOpen(true);
+
   settingsWindow.on('closed', () => {
     settingsWindow = null;
+    setCodexSettingsOpen(false);
   });
 }
 

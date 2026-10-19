@@ -18,6 +18,23 @@ export function getCodexModelId(key: string): string | undefined {
   return isCodexModelKey(key) ? key.slice(CODEX_MODEL_PREFIX.length) : undefined;
 }
 
+/**
+ * Desired state of the Codex App Server (the "should this be running at all?"
+ * rule). The server is a heavyweight sidecar: a Node launcher plus the native
+ * `codex` binary, roughly 130 MB together. It must therefore run only while the
+ * user can actually reach Codex:
+ *
+ * - a Codex model is selected (translations go through the App Server), or
+ * - the model settings window is open (sign-in, account status, catalog,
+ *   previews).
+ *
+ * Local, API-key, and custom models must not keep it resident, so their memory
+ * stays available to the model they actually use.
+ */
+export function shouldRunCodexServer(selectedModel: string, settingsOpen: boolean): boolean {
+  return settingsOpen || isCodexModelKey(selectedModel);
+}
+
 /** Convert the App Server catalog into Honyo's model-menu shape. */
 export function toCodexModels(descriptors: CodexModelDescriptor[]): Record<string, AIModelInfo> {
   const models: Record<string, AIModelInfo> = {};

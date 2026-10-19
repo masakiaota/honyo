@@ -97,6 +97,8 @@ General設定でストリーミングを有効にすると、ポップアップ�
 
 **(ChatGPT)** は Codex の利用権限で使うモデルを示す。それ以外の提供元のモデルは API キーを使う。
 
+Codex のランタイムは必要なときだけ起動する。**(ChatGPT)** のモデルを選んでいるとき、またはモデル設定画面を開いているときだけだ。それ以外のモデルでは停止したままになり、オフライン翻訳や API キーの構成はその分のメモリを節約できる。
+
 ### API キーで接続する場合
 
 1. [Anthropic Console](https://console.anthropic.com/)、[OpenAI Platform](https://platform.openai.com/api-keys)、[Google AI Studio](https://aistudio.google.com/apikey)のいずれかでキーを取得する。
