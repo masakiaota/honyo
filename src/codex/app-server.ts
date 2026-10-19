@@ -295,13 +295,18 @@ export class CodexAppServer {
     this.initialized = false;
     // Fail in-flight turns instead of leaving them to hang until their own
     // timeout: a deliberate stop must release the callers that await them.
-    for (const abort of this.activeTurns) abort();
-    this.activeTurns.clear();
+    this.abortActiveTurns();
     this.output?.close();
     this.output = null;
     this.process?.kill();
     this.process = null;
     this.rejectPending(new Error('Codex App Server stopped'));
+  }
+
+  /** Reject every in-flight turn so the callers awaiting `completion` resume. */
+  private abortActiveTurns(): void {
+    for (const abort of this.activeTurns) abort();
+    this.activeTurns.clear();
   }
 
   private async startInternal(): Promise<void> {
@@ -330,6 +335,9 @@ export class CodexAppServer {
       if (this.process !== child) return;
       this.initialized = false;
       this.process = null;
+      // An unexpected exit must also release turns whose turn/start already
+      // succeeded; they await `completion`, not a pending RPC.
+      this.abortActiveTurns();
       this.rejectPending(new Error('Codex App Server exited'));
       for (const listener of this.exitListeners) listener();
     });
