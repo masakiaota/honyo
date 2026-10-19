@@ -6,7 +6,7 @@ import {
 } from './app-server.ts';
 import { shouldRunCodexServer, toCodexModels } from './models.ts';
 import { setCodexModels } from '../models-remote.ts';
-import { getConfig } from '../config/index.ts';
+import { getConfig, subscribeConfig } from '../config/index.ts';
 
 export interface CodexConnectionState {
   status: 'disconnected' | 'connecting' | 'connected';
@@ -130,6 +130,24 @@ export function syncCodexRuntime(): Promise<void> {
 export function setCodexSettingsOpen(open: boolean): void {
   settingsOpen = open;
   void syncCodexRuntime();
+}
+
+let watchedModel: string | null = null;
+
+/**
+ * Reconcile the runtime whenever the selected model changes. Window events
+ * alone are not enough: saving can commit `aiModel` after Settings has already
+ * closed (for example when an offline warmup finishes late), so the runtime
+ * must re-check the committed selection itself.
+ */
+export function watchCodexRuntime(): void {
+  watchedModel = getConfig().aiModel;
+  subscribeConfig(() => {
+    const model = getConfig().aiModel;
+    if (model === watchedModel) return;
+    watchedModel = model;
+    void syncCodexRuntime();
+  });
 }
 
 export function subscribeCodexConnection(

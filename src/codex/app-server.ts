@@ -65,6 +65,7 @@ export class CodexAppServer {
   private starting: Promise<void> | null = null;
   private requestId = 0;
   private pending = new Map<number, PendingRequest>();
+  private activeTurns = new Set<() => void>();
   private listeners = new Set<(notification: CodexNotification) => void>();
   private exitListeners = new Set<() => void>();
 
@@ -257,6 +258,7 @@ export class CodexAppServer {
       }
       rejectCompletion?.(new Error('Translation cancelled'));
     };
+    this.activeTurns.add(abort);
     signal?.addEventListener('abort', abort, { once: true });
 
     try {
@@ -282,6 +284,7 @@ export class CodexAppServer {
       turnId = stringValue(asObject(turnResult?.turn)?.id);
       return await completion;
     } finally {
+      this.activeTurns.delete(abort);
       signal?.removeEventListener('abort', abort);
       unsubscribe();
       void this.request('thread/delete', { threadId }).catch(() => undefined);
@@ -290,6 +293,10 @@ export class CodexAppServer {
 
   stop(): void {
     this.initialized = false;
+    // Fail in-flight turns instead of leaving them to hang until their own
+    // timeout: a deliberate stop must release the callers that await them.
+    for (const abort of this.activeTurns) abort();
+    this.activeTurns.clear();
     this.output?.close();
     this.output = null;
     this.process?.kill();
