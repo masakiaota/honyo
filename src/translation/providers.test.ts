@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ApiKeys, Config } from '../config/types.ts';
 import type { AIModelInfo } from '../models.ts';
 const mock = vi.hoisted(() => ({
@@ -57,6 +57,7 @@ beforeEach(() => {
   mock.options.mockReturnValue({ effort: 'none' });
   mock.request.mockResolvedValue('result');
 });
+afterEach(() => vi.restoreAllMocks());
 it('uses the same resolved model and does not load unused provider SDKs for ChatGPT or OpenAI', async () => {
   for (const provider of ['chatgpt', 'openai'] as const) {
     const model: AIModelInfo = { provider, model: 'gpt-6-luna', name: 'Luna' };
@@ -95,5 +96,33 @@ it.each(['anthropic', 'google'] as const)(
     expect(partials).toEqual(['Hello', 'Hello world']);
     expect(factory).toHaveBeenCalledWith({ apiKey: `${provider}-key` });
     expect(mock.request).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['anthropic', 'google'] as const)(
+  'rejects partial %s output when the internal deadline aborts the stream',
+  async provider => {
+    mock.model.mockReturnValue({ provider, model: 'test-model', name: 'Test' });
+    const factory = provider === 'anthropic' ? mock.anthropic : mock.google;
+    factory.mockReturnValue(() => 'test-provider-model');
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const caller = new AbortController();
+    const timeout = new DOMException('Request timed out', 'TimeoutError');
+    mock.stream.mockImplementation(({ abortSignal }: { abortSignal: AbortSignal }) => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', text: 'Partial' };
+        deadline.abort(timeout);
+        expect(abortSignal.aborted).toBe(true);
+        yield { type: 'abort' };
+      })(),
+    }));
+    const partial = vi.fn();
+    await expect(
+      generateModelText(config, 'instructions', 'input', partial, caller.signal),
+    ).rejects.toBe(timeout);
+    expect(caller.signal.aborted).toBe(false);
+    expect(partial).toHaveBeenCalledWith('Partial');
+    expect(AbortSignal.timeout).toHaveBeenCalledWith(120_000);
   },
 );

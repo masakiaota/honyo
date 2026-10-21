@@ -1,5 +1,5 @@
 import type * as OAuth from './oauth.ts';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SessionData } from './storage.ts';
 const mock = vi.hoisted(() => ({
   session: {} as SessionData,
@@ -8,6 +8,7 @@ const mock = vi.hoisted(() => ({
   identity: vi.fn(),
   revoke: vi.fn(),
   models: vi.fn(),
+  listen: vi.fn(),
 }));
 vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }));
 vi.mock('../models-remote.ts', () => ({ setChatGPTModels: mock.models }));
@@ -20,6 +21,7 @@ vi.mock('./oauth.ts', async original => ({
   requestTokens: mock.tokens,
   verifyIdentity: mock.identity,
   revokeToken: mock.revoke,
+  listenForCode: mock.listen,
 }));
 const scopes = ['chatgpt.tokens.use.direct'];
 beforeEach(() => {
@@ -55,7 +57,22 @@ beforeEach(() => {
   });
   mock.identity.mockResolvedValue({ subject: 'subject' });
   mock.revoke.mockResolvedValue(undefined);
+  mock.listen.mockResolvedValue({
+    redirectUri: 'http://127.0.0.1:1234/auth/callback',
+    result: Promise.resolve({ code: 'code', clientId: 'issued' }),
+    close: vi.fn(),
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        models: [{ slug: 'test-model', display_name: 'Test', visibility: 'list' }],
+      }),
+    }),
+  );
 });
+afterEach(() => vi.unstubAllGlobals());
 it('serializes concurrent refreshes and saves rotated tokens before validating identity', async () => {
   const { withChatGPTToken } = await import('./index.ts');
   const saved: unknown[] = [];
@@ -132,4 +149,91 @@ it('stops requests and clears local credentials even if remote sign-out fails', 
   expect(mock.revoke).toHaveBeenCalledWith('issued', 'rotated-refresh');
   expect(mock.session.accounts[0]?.credentials).toBeUndefined();
   expect(getChatGPTState().error).toContain('Remote revocation was not confirmed');
+});
+
+it('preserves the selected account catalog when a previous account refresh fails', async () => {
+  const { AuthError } = await import('./oauth.ts');
+  const { withChatGPTToken, selectChatGPTAccount, getChatGPTState } = await import('./index.ts');
+  const oldAccount = mock.session.accounts[0]!;
+  mock.session.accounts.push({
+    ...structuredClone(oldAccount),
+    id: 'other',
+    credentials: { ...oldAccount.credentials!, expiresAt: Date.now() + 3600_000 },
+  });
+  const refresh = Promise.withResolvers<never>();
+  const started = Promise.withResolvers<void>();
+  mock.tokens.mockImplementationOnce(() => {
+    started.resolve();
+    return refresh.promise;
+  });
+  const operation = vi.fn();
+  const failed = expect(withChatGPTToken(operation)).rejects.toThrow('expired');
+  await started.promise;
+  await selectChatGPTAccount('other');
+  const state = getChatGPTState();
+  expect(mock.models).toHaveBeenLastCalledWith({
+    'chatgpt:test-model': { provider: 'chatgpt', model: 'test-model', name: 'Test' },
+  });
+  mock.models.mockClear();
+  refresh.reject(new AuthError('invalid_grant', 'expired'));
+  await failed;
+  expect(oldAccount.credentials).toBeUndefined();
+  expect(getChatGPTState()).toEqual(state);
+  expect(mock.models).not.toHaveBeenCalled();
+  expect(operation).not.toHaveBeenCalled();
+});
+
+it.each(['exchange', 'identity'] as const)(
+  'reuses the initial registration after a failed %s',
+  async stage => {
+    mock.session.accounts = [];
+    delete mock.session.selectedId;
+    const { signInChatGPT } = await import('./index.ts');
+    (stage === 'exchange' ? mock.tokens : mock.identity).mockRejectedValueOnce(
+      new Error('offline'),
+    );
+    await signInChatGPT();
+    const account = mock.session.accounts[0]!;
+    expect(account.clientId).toBe('issued');
+    expect(mock.session.selectedId).toBe(account.id);
+    expect(account.credentials).toBeUndefined();
+    await signInChatGPT();
+    expect(mock.listen).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(AbortSignal),
+      'issued',
+    );
+    expect(mock.session.accounts).toHaveLength(1);
+    expect(account.credentials?.accessToken).toBe('new-access');
+  },
+);
+
+it('keeps the existing selection when adding an account fails', async () => {
+  const { signInChatGPT } = await import('./index.ts');
+  mock.tokens.mockRejectedValueOnce(new Error('offline'));
+  await signInChatGPT(true);
+  expect(mock.session.selectedId).toBe('account');
+  expect(mock.session.accounts).toHaveLength(2);
+});
+
+it('blocks token acquisition throughout sign-out and resumes after signing in', async () => {
+  const { withChatGPTToken, signOutChatGPT, signInChatGPT } = await import('./index.ts');
+  const revocation = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  mock.revoke.mockImplementationOnce(() => {
+    started.resolve();
+    return revocation.promise;
+  });
+  const signingOut = signOutChatGPT();
+  await started.promise;
+  const operation = vi.fn();
+  await expect(withChatGPTToken(operation)).rejects.toThrow();
+  expect(mock.tokens).not.toHaveBeenCalled();
+  expect(operation).not.toHaveBeenCalled();
+  revocation.resolve();
+  await signingOut;
+  await expect(withChatGPTToken(operation)).rejects.toThrow();
+  expect(mock.session.accounts[0]?.credentials).toBeUndefined();
+  await signInChatGPT();
+  expect(await withChatGPTToken(token => Promise.resolve(token))).toBe('new-access');
 });

@@ -129,8 +129,10 @@ async function accessToken(account: Account): Promise<string> {
           delete account.credentials;
           delete account.pending;
           save();
-          setChatGPTModels({});
-          errorMessage = 'Your ChatGPT session has expired. Connect again in Model Settings.';
+          if (selected()?.id === account.id) {
+            setChatGPTModels({});
+            errorMessage = 'Your ChatGPT session has expired. Connect again in Model Settings.';
+          }
           publish();
         }
         throw error;
@@ -262,6 +264,7 @@ export async function signInChatGPT(newAccount = false): Promise<void> {
         label: `Connection ${read().accounts.length + 1}`,
       };
       read().accounts.push(account);
+      read().selectedId ??= account.id;
     }
     save(); // Retain the issued ID even if exchange fails; reconnect must reuse it.
     const tokens = await requestTokens(
@@ -310,7 +313,7 @@ export async function selectChatGPTAccount(id: string): Promise<void> {
 }
 export async function signOutChatGPT(): Promise<void> {
   cancelChatGPTSignIn();
-  stopRequests();
+  requests.abort();
   const account = selected();
   if (!account) return;
   await refreshes.get(account.id)?.catch(() => undefined);

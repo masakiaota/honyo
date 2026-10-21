@@ -40,11 +40,12 @@ export async function generateModelText(
     model.provider === 'anthropic'
       ? (await import('@ai-sdk/anthropic')).createAnthropic({ apiKey: token })(model.model)
       : (await import('@ai-sdk/google')).createGoogleGenerativeAI({ apiKey: token })(model.model);
+  const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(120_000)]);
   const result = streamText({
     model: otherModel,
     system: instructions,
     prompt: input,
-    abortSignal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(120_000)]),
+    abortSignal: bounded,
     maxRetries: 0,
   });
   let text = '';
@@ -56,7 +57,7 @@ export async function generateModelText(
       onText?.(text);
     }
   }
-  signal?.throwIfAborted();
+  bounded.throwIfAborted();
   if (!text.trim()) throw new Error('The model returned no text.');
   return text;
 }
