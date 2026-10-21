@@ -70,7 +70,12 @@ export function subscribeChatGPT(listener: () => void): () => void {
 }
 
 /** Keep a rotated token encrypted before remote signature validation, so transient JWKS failures don't lose it. */
-async function acceptTokens(account: Account, tokens: Tokens, nonce?: string): Promise<void> {
+async function acceptTokens(
+  account: Account,
+  tokens: Tokens,
+  nonce?: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const now = Date.now();
   account.pending = {
     receivedAt: now,
@@ -84,17 +89,22 @@ async function acceptTokens(account: Account, tokens: Tokens, nonce?: string): P
     },
   };
   save();
-  await verifyPending(account);
+  await verifyPending(account, signal);
 }
-async function verifyPending(account: Account): Promise<void> {
+async function verifyPending(account: Account, signal?: AbortSignal): Promise<void> {
   if (!account.pending) return;
   const pending = account.pending;
+  // Only the active sign-in may promote its tokens; background recovery is for refreshes.
+  if (pending.nonce && !signal)
+    throw new Error('Connect your ChatGPT account again in Model Settings.');
+  signal?.throwIfAborted();
   const identity = await verifyIdentity(
     pending.credentials.idToken,
     account.clientId,
     pending.nonce,
     pending.receivedAt,
   );
+  signal?.throwIfAborted();
   if (account.subject && account.subject !== identity.subject)
     throw new AuthError('identity_changed', 'The account did not match this saved connection.');
   account.subject = identity.subject;
@@ -277,7 +287,7 @@ export async function signInChatGPT(newAccount = false): Promise<void> {
       },
       signal,
     );
-    await acceptTokens(account, tokens, nonce);
+    await acceptTokens(account, tokens, nonce, signal);
     signal.throwIfAborted();
     stopRequests();
     read().selectedId = account.id;

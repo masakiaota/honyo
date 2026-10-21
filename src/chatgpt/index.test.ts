@@ -240,3 +240,40 @@ it('blocks token acquisition throughout sign-out and resumes after signing in', 
   await signInChatGPT();
   expect(await withChatGPTToken(token => Promise.resolve(token))).toBe('new-access');
 });
+
+it('keeps cancelled sign-in tokens pending without activating them after restart', async () => {
+  const connection = await import('./index.ts');
+  await connection.signOutChatGPT();
+  const verification = Promise.withResolvers<{ subject: string }>();
+  const started = Promise.withResolvers<void>();
+  mock.identity.mockImplementationOnce(() => {
+    started.resolve();
+    return verification.promise;
+  });
+  const signingIn = connection.signInChatGPT();
+  await started.promise;
+  connection.cancelChatGPTSignIn();
+  verification.resolve({ subject: 'subject' });
+  await signingIn;
+  expect(connection.getChatGPTState().status).toBe('disconnected');
+  expect(connection.getChatGPTState().error).toContain('cancelled');
+  expect(mock.session.accounts[0]?.credentials).toBeUndefined();
+  expect(mock.session.accounts[0]?.pending?.credentials.refreshToken).toBe('rotated-refresh');
+  const operation = vi.fn();
+  await expect(connection.withChatGPTToken(operation)).rejects.toThrow();
+
+  vi.resetModules();
+  const restarted = await import('./index.ts');
+  await restarted.refreshChatGPTModels();
+  await expect(restarted.withChatGPTToken(operation)).rejects.toThrow();
+  expect(operation).not.toHaveBeenCalled();
+  expect(restarted.getChatGPTState().status).toBe('disconnected');
+  expect(mock.session.accounts[0]?.credentials).toBeUndefined();
+  await restarted.signOutChatGPT();
+  expect(mock.revoke).toHaveBeenLastCalledWith('issued', 'rotated-refresh');
+  expect(mock.session.accounts[0]?.pending).toBeUndefined();
+
+  await restarted.signInChatGPT();
+  expect(restarted.getChatGPTState().status).toBe('connected');
+  expect(await restarted.withChatGPTToken(token => Promise.resolve(token))).toBe('new-access');
+});
