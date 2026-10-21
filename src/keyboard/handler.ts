@@ -1,6 +1,6 @@
 import { clipboard, Notification } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
-import { translateTextSafe, translateTextStreaming } from '../translation/index.ts';
+import { translateTextDetailed, translateTextStreaming } from '../translation/index.ts';
 import { getConfig, getPausedState } from '../config/index.ts';
 import {
   exceedsInputCharacterLimit,
@@ -107,7 +107,7 @@ export function setupKeyboardHandler(): void {
               // Notify that streaming is complete
               finalizePopupTranslation(translation);
             } else {
-              const result = await translateTextSafe(
+              const result = await translateTextDetailed(
                 text,
                 config.targetLanguage,
                 config.secondaryLanguage,

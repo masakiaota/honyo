@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getCodexTurnOptions,
-  getOpenAIReasoningEffort,
-  getOpenAIProviderOptions,
-  getReasoningEffortOptions,
+  getReasoningEffort,
+  getOpenAIRequestOptions,
   supportsOpenAIFastMode,
   supportsOpenAIReasoningEffort,
 } from './reasoning-effort.ts';
 import type { Config } from './config/types.ts';
-import { setCodexModels } from './models-remote.ts';
 
 const baseConfig: Config = {
   targetLanguage: 'English',
@@ -31,9 +28,9 @@ describe('OpenAI reasoning effort', () => {
       openaiReasoningEfforts: { 'gpt-5.6-luna': 'low' },
     };
 
-    expect(getOpenAIReasoningEffort(config)).toBe('low');
-    expect(getOpenAIProviderOptions(config)).toEqual({
-      openai: { reasoningEffort: 'low' },
+    expect(getReasoningEffort(config)).toBe('low');
+    expect(getOpenAIRequestOptions(config)).toEqual({
+      effort: 'low',
     });
   });
 
@@ -43,7 +40,7 @@ describe('OpenAI reasoning effort', () => {
       openaiReasoningEfforts: { 'gpt-5.6-terra': 'high' },
     };
 
-    expect(getOpenAIReasoningEffort(config)).toBeUndefined();
+    expect(getReasoningEffort(config)).toBe('none');
   });
 
   it('does not expose reasoning effort for a non-reasoning OpenAI model', () => {
@@ -61,43 +58,26 @@ describe('OpenAI reasoning effort', () => {
     expect(
       supportsOpenAIFastMode({ provider: 'openai', name: 'GPT-5.6 Luna', model: 'gpt-5.6-luna' }),
     ).toBe(true);
-    expect(getOpenAIProviderOptions(config)).toEqual({
-      openai: { serviceTier: 'priority' },
+    expect(getOpenAIRequestOptions(config)).toEqual({
+      effort: 'none',
+      serviceTier: 'priority',
     });
   });
 });
 
-describe('ChatGPT/Codex model settings', () => {
-  it('uses the account catalog and passes the selected effort and Fast tier to Codex', () => {
-    setCodexModels({
-      'codex:gpt-5.6-sol': {
-        provider: 'codex',
-        name: 'GPT-5.6 Sol (ChatGPT)',
-        model: 'gpt-5.6-sol',
-        reasoningEffortOptions: [{ reasoningEffort: 'low' }, { reasoningEffort: 'ultra' }],
-        serviceTiers: [{ id: 'priority', name: 'Fast' }],
-      },
-    });
-    const config: Config = {
-      ...baseConfig,
-      aiModel: 'codex:gpt-5.6-sol',
-      codexReasoningEfforts: { 'gpt-5.6-sol': 'ultra' },
-      codexFastModels: ['gpt-5.6-sol'],
-      openaiReasoningEfforts: { 'gpt-5.6-sol': 'low' },
-      openaiFastModels: [],
-    };
-
-    expect(
-      getReasoningEffortOptions({
-        provider: 'codex',
-        name: 'GPT-5.6 Sol (ChatGPT)',
-        model: 'gpt-5.6-sol',
-        reasoningEffortOptions: [{ reasoningEffort: 'ultra' }],
-      }),
-    ).toEqual([{ reasoningEffort: 'ultra' }]);
-    expect(getCodexTurnOptions(config)).toEqual({
-      effort: 'ultra',
-      serviceTier: 'priority',
-    });
-  });
+it('keeps an explicit model default separate from a new none selection', () => {
+  expect(
+    getReasoningEffort({ ...baseConfig, openaiReasoningEfforts: { 'gpt-5.6-luna': null } }),
+  ).toBeUndefined();
+  expect(getReasoningEffort(baseConfig)).toBe('none');
+});
+it('keeps ChatGPT effort preferences separate from API-key preferences', () => {
+  const model = { provider: 'chatgpt' as const, model: 'gpt-6-luna', name: 'Luna' };
+  expect(
+    getReasoningEffort({ ...baseConfig, openaiReasoningEfforts: { 'gpt-6-luna': 'high' } }, model),
+  ).toBe('none');
+  expect(
+    getReasoningEffort({ ...baseConfig, chatgptReasoningEfforts: { 'gpt-6-luna': 'low' } }, model),
+  ).toBe('low');
+  expect(getReasoningEffort(baseConfig, { ...model, model: 'gpt-6.1-sol' })).toBeUndefined();
 });

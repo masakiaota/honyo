@@ -1,3 +1,4 @@
+import type { ChatGPTState } from '../chatgpt/index.ts';
 import { CUSTOM_MODEL_ID } from '../models.ts';
 import type { ModelDraft } from '../model-selection.ts';
 import type {
@@ -15,6 +16,7 @@ import type { LocalState } from '../local/index.ts';
     saved: ModelDraft;
   }
   interface State {
+    chatgpt: ChatGPTState;
     providers: Array<{ id: AIProvider; name: string; status: string }>;
     models: Model[];
     current: ModelDraft | null;
@@ -27,7 +29,6 @@ import type { LocalState } from '../local/index.ts';
       LocalState & { name: string; memory: string; source: string; license: string }
     >;
     busy: boolean;
-    account: { status: string; error?: string };
     languages: { primary: string; secondary: string };
   }
   interface Reply {
@@ -77,7 +78,7 @@ import type { LocalState } from '../local/index.ts';
     state?.current
       ? { ...state.current }
       : {
-          provider: 'local',
+          provider: state?.currentId.startsWith('chatgpt:') ? 'chatgpt' : 'local',
           modelId: state?.currentId ?? '',
           customModel: '',
           effort: null,
@@ -145,9 +146,9 @@ import type { LocalState } from '../local/index.ts';
       )
         return 'Local models support English ↔ Japanese. Choose these two languages in the menu before saving.';
       if (local.error) return local.error;
-    } else if (draft.provider === 'codex' && state.account.status !== 'connected')
-      return 'Sign in with ChatGPT to use this provider.';
-    else if (
+    } else if (draft.provider === 'chatgpt' && !state.chatgpt.sharing) {
+      return 'Connect ChatGPT and enable plan usage first.';
+    } else if (
       ['openai', 'anthropic', 'google'].includes(draft.provider) &&
       p?.status !== 'API key saved'
     )
@@ -185,20 +186,27 @@ import type { LocalState } from '../local/index.ts';
       button.disabled = locked;
       button.classList.toggle(
         'connected',
-        /^(Ready|Signed in|API key saved)/.test(provider.status),
+        /^(Ready|API key saved|Connected)/.test(provider.status),
       );
     }
     const api = ['openai', 'anthropic', 'google'].includes(draft.provider);
-    $('chatgpt-connection').hidden = draft.provider !== 'codex';
     $('api-connection').hidden = !api;
+    $('chatgpt-connection').hidden = draft.provider !== 'chatgpt';
+    const account = $<HTMLSelectElement>('chatgpt-account');
+    account.replaceChildren(new Option('Choose a connection…', ''));
+    for (const item of state.chatgpt.accounts) account.add(new Option(item.label, item.id));
+    account.value = state.chatgpt.selectedId ?? '';
+    account.disabled = locked;
+    $('chatgpt-error').textContent = state.chatgpt.error ?? '';
+    $('chatgpt-cancel').hidden = state.chatgpt.status !== 'connecting';
+    for (const id of ['chatgpt-connect', 'chatgpt-add', 'chatgpt-disconnect'])
+      $<HTMLButtonElement>(id).disabled = locked;
+    $('chatgpt-add').hidden = !state.chatgpt.accounts.length;
+    $('chatgpt-disconnect').hidden = state.chatgpt.status !== 'connected';
     $('connection-summary').textContent =
       draft.provider === 'local'
         ? 'Runs on this Mac. No account or API key needed.'
         : (state.providers.find(p => p.id === draft?.provider)?.status ?? '');
-    $<HTMLButtonElement>('model-login').disabled = locked || state.account.status === 'connecting';
-    $('model-login').textContent =
-      state.account.status === 'connected' ? 'Reconnect ChatGPT' : 'Sign in with ChatGPT';
-    $<HTMLButtonElement>('model-logout').disabled = locked || state.account.status !== 'connected';
     for (const id of ['model-key-save', 'model-key-remove', 'provider-api-key'])
       $<HTMLButtonElement>(id).disabled = locked;
     const select = $<HTMLSelectElement>('model-choice');
@@ -347,14 +355,22 @@ import type { LocalState } from '../local/index.ts';
   $('model-download-cancel').onclick = (): void => {
     void host.honyoSettings.model({ action: 'cancel' });
   };
-  $('model-login').onclick = (): void => {
-    void action({ action: 'login' });
-  };
-  $('model-logout').onclick = (): void => {
-    void action({ action: 'logout' });
-  };
   $('model-refresh').onclick = (): void => {
     void action({ action: 'refresh', provider: draft?.provider });
+  };
+  for (const id of ['chatgpt-connect', 'chatgpt-add', 'chatgpt-disconnect'])
+    $(id).onclick = (): void => {
+      void action({ action: id });
+    };
+  $('chatgpt-cancel').onclick = (): void => {
+    void host.honyoSettings.model({ action: 'chatgpt-cancel' });
+  };
+  $('chatgpt-usage').onclick = (): void => {
+    void host.honyoSettings.model({ action: 'chatgpt-usage' });
+  };
+  $('chatgpt-account').onchange = (): void => {
+    const id = $<HTMLSelectElement>('chatgpt-account').value;
+    if (id) void action({ action: 'chatgpt-select', id });
   };
   $('model-key-save').onclick = (): void => {
     const key = $<HTMLInputElement>('provider-api-key').value.trim();
@@ -391,6 +407,13 @@ import type { LocalState } from '../local/index.ts';
     if (!draft || !changed) {
       draft = active();
       baseline = JSON.stringify(draft);
+    }
+    if (draft.provider === 'chatgpt' && !chosen()) {
+      const first = state.models.find(m => m.provider === 'chatgpt');
+      if (first) {
+        selectModel(first.id);
+        return;
+      }
     }
     render();
   }

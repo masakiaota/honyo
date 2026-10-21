@@ -1,4 +1,4 @@
-export type AIProvider = 'anthropic' | 'openai' | 'google' | 'codex' | 'local';
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'chatgpt' | 'local';
 
 export interface ReasoningEffortOption {
   reasoningEffort: string;
@@ -16,8 +16,6 @@ export interface AIModelInfo {
   name: string;
   provider: AIProvider;
   model: string;
-  reasoningEffortOptions?: ReasoningEffortOption[];
-  serviceTiers?: ModelServiceTier[];
 }
 
 export const AI_MODELS: Record<string, AIModelInfo> = {

@@ -1,23 +1,14 @@
 import { isLocalModel, localDirection } from '../local/model.ts';
 import { translateLocal } from '../local/index.ts';
-import { Notification } from 'electron';
-import { generateText, streamText } from 'ai';
-import type { LanguageModel } from 'ai';
-import { CUSTOM_MODEL_ID } from '../models.ts';
-import { getModelInfo } from '../models-remote.ts';
-import { languages } from '../language/constants.ts';
-import { getAIProvider } from './providers.ts';
-import { getConfig, getApiKeys } from '../config/index.ts';
-import type { Config, ApiKeys } from '../config/types.ts';
-import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
+import { getConfig } from '../config/index.ts';
+import type { Config } from '../config/types.ts';
+import { generateModelText } from './providers.ts';
 import {
   exceedsInputCharacterLimit,
   getEffectiveMaxInputCharacters,
   getInputCharacterLimitMessage,
 } from '../input-character-limit.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
-import { runCodexText } from '../codex/index.ts';
-import { getCodexModelId, isCodexModelKey } from '../codex/models.ts';
 
 export type TranslationResult = ParsedTranslation;
 
@@ -26,14 +17,8 @@ function buildSystemPrompt(
   primaryLanguage: string,
   secondaryLanguage: string,
   customPrompt: string,
-  customLanguages?: string[],
 ): string {
   const customPromptSection = customPrompt ? `\n\nAdditional instructions:\n${customPrompt}` : '';
-
-  const allLanguages = [...languages];
-  if (customLanguages && customLanguages.length > 0) {
-    allLanguages.push(...customLanguages);
-  }
 
   return `You are a professional translation engine. Your ONLY function is to translate text.
 
@@ -57,137 +42,12 @@ Output Format:
 ${customPromptSection}`.trim();
 }
 
-function validateApiKey(config: Config, apiKeys: ApiKeys): { valid: boolean; error?: string } {
-  const selectedModel =
-    config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
-
-  if (config.aiModel === CUSTOM_MODEL_ID) {
-    if (!config.customModel || !config.customModel.model || !config.customModel.provider) {
-      new Notification({
-        title: 'Custom Model Not Configured',
-        body: 'Please configure custom model in Settings',
-      }).show();
-      return { valid: false, error: 'Custom model not configured' };
-    }
-
-    const apiKey = apiKeys[config.customModel.provider];
-    if (!apiKey) {
-      new Notification({
-        title: 'API Key Missing',
-        body: `Please configure API key for ${config.customModel.provider}`,
-      }).show();
-      return { valid: false, error: `API key not configured for ${config.customModel.provider}` };
-    }
-  } else {
-    const modelInfo = selectedModel;
-    if (!modelInfo) {
-      return { valid: false, error: `Unknown model: ${config.aiModel}` };
-    }
-
-    if (modelInfo.provider === 'local') {
-      return { valid: true };
-    }
-
-    if (modelInfo.provider === 'codex') {
-      return { valid: false, error: 'ChatGPT/Codex account is not connected' };
-    }
-
-    const apiKey = apiKeys[modelInfo.provider];
-    if (!apiKey) {
-      new Notification({
-        title: 'API Key Missing',
-        body: `Please configure API key for ${modelInfo.name}`,
-      }).show();
-      return { valid: false, error: `API key not configured for ${modelInfo.provider}` };
-    }
-  }
-
-  return { valid: true };
-}
-
-function isCodexModel(config: Config): boolean {
-  return isCodexModelKey(config.aiModel);
-}
-
-function buildCodexPrompt(systemPrompt: string, text: string): string {
-  return `${systemPrompt}
-
-Do not use tools, inspect files, or run commands. Return the requested translation directly.
-
-<source_text>
-${text}
-</source_text>`;
-}
-
-async function translateWithCodex(
-  text: string,
-  primaryLanguage: string,
-  secondaryLanguage: string,
-  config: Config,
-  signal?: AbortSignal,
-): Promise<TranslationResult> {
-  const model = getCodexModelId(config.aiModel);
-  if (!model) {
-    throw new Error('Selected ChatGPT/Codex model is unavailable');
-  }
-
-  const systemPrompt = buildSystemPrompt(
-    primaryLanguage,
-    secondaryLanguage,
-    config.customPrompt,
-    config.customLanguages,
-  );
-  const raw = await runCodexText(
-    model,
-    buildCodexPrompt(systemPrompt, text),
-    getCodexTurnOptions(config),
-    undefined,
-    signal,
-  );
-  const parsed = parseTranslationOutput(raw.trim());
-  return { ...parsed, translation: parsed.translation.trim() };
-}
-
-function getModel(config: Config, apiKeys: ApiKeys): LanguageModel {
-  return getAIProvider(config.aiModel, apiKeys, config.customModel);
-}
-
-// Thrown by translateTextStrict when API-key/model validation fails (the
-// relevant Notification is already shown by validateApiKey).
-class TranslationValidationError extends Error {}
-
-function handleTranslationError(error: unknown, config: Config): string {
-  // Preserve the legacy return value for validation failures (raw message).
-  if (error instanceof TranslationValidationError) {
-    return error.message;
-  }
-  console.error('Translation error:', error);
-  if (error instanceof Error && error.message.includes('No API key')) {
-    const modelName =
-      config.aiModel === CUSTOM_MODEL_ID
-        ? 'Custom Model'
-        : (getModelInfo(config.aiModel)?.name ?? 'selected model');
-    new Notification({
-      title: 'API Key Missing',
-      body: `Please configure API key for ${modelName}`,
-    }).show();
-    return 'API key not configured';
-  }
-  return 'Translation failed: ' + (error instanceof Error ? error.message : String(error));
-}
-
 function assertWithinInputLimit(text: string, config: Config): void {
   const limit = getEffectiveMaxInputCharacters(config.maxInputCharacters, config.aiModel);
   if (exceedsInputCharacterLimit(text, limit))
     throw new Error(getInputCharacterLimitMessage(limit));
 }
 
-/**
- * Perform a translation without catching errors: rejects (throws) on API
- * failures and throws on API-key/model validation failure. Returns the
- * translation plus the detected source/target languages parsed from the
- * model-emitted header (undefined when the header was missing/malformed).
- */
 export async function translateTextDetailed(
   text: string,
   primaryLanguage: string,
@@ -195,9 +55,7 @@ export async function translateTextDetailed(
   signal?: AbortSignal,
 ): Promise<TranslationResult> {
   const config = getConfig();
-  const apiKeys = getApiKeys();
   assertWithinInputLimit(text, config);
-
   if (isLocalModel(config.aiModel))
     return translateLocal(
       text,
@@ -207,241 +65,64 @@ export async function translateTextDetailed(
       undefined,
       config.aiModel,
     );
-
-  if (isCodexModel(config)) {
-    return translateWithCodex(text, primaryLanguage, secondaryLanguage, config, signal);
-  }
-
-  // Validate API key (shows a Notification on failure) and throw on invalid.
-  const validation = validateApiKey(config, apiKeys);
-  if (!validation.valid) {
-    throw new TranslationValidationError(validation.error || 'API key validation failed');
-  }
-
-  // Get the model
-  const model = getModel(config, apiKeys);
-  const providerOptions = getOpenAIProviderOptions(config);
-
-  console.log(`Translating text:`, text.slice(0, 50) + '...');
-
-  // Build system prompt
-  const systemPrompt = buildSystemPrompt(
-    primaryLanguage,
-    secondaryLanguage,
-    config.customPrompt,
-    config.customLanguages,
+  const raw = await generateModelText(
+    config,
+    buildSystemPrompt(primaryLanguage, secondaryLanguage, config.customPrompt),
+    text,
+    undefined,
+    signal,
   );
-
-  const { text: raw } = await generateText(
-    signal
-      ? {
-          model,
-          system: systemPrompt,
-          prompt: text,
-          ...(providerOptions ? { providerOptions } : {}),
-          abortSignal: signal,
-        }
-      : {
-          model,
-          system: systemPrompt,
-          prompt: text,
-          ...(providerOptions ? { providerOptions } : {}),
-        },
-  );
-
   const parsed = parseTranslationOutput(raw.trim());
-  const translation = parsed.translation.trim();
-  console.log('Translation complete:', translation.slice(0, 50) + '...');
-  return { ...parsed, translation };
+  return { ...parsed, translation: parsed.translation.trim() };
 }
-
-/**
- * Like translateTextDetailed but returns only the translation string. Still
- * throws on failure — used by the popup back-translation via translateText's
- * error handling elsewhere.
- */
-export async function translateTextStrict(
-  text: string,
-  primaryLanguage: string,
-  secondaryLanguage: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  return (await translateTextDetailed(text, primaryLanguage, secondaryLanguage, signal))
-    .translation;
-}
-
-/**
- * Non-throwing detailed translation: on any failure returns the legacy error
- * string as `translation` (with languages undefined). Callers that need the
- * language pair but also the tolerant error-string behavior use this.
- */
-export async function translateTextSafe(
-  text: string,
-  primaryLanguage: string,
-  secondaryLanguage: string,
-  signal?: AbortSignal,
-): Promise<TranslationResult> {
-  try {
-    return await translateTextDetailed(text, primaryLanguage, secondaryLanguage, signal);
-  } catch (error) {
-    if (isLocalModel(getConfig().aiModel)) throw error;
-    return { translation: handleTranslationError(error, getConfig()) };
-  }
-}
-
-export async function translateText(
-  text: string,
-  primaryLanguage: string,
-  secondaryLanguage: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  return (await translateTextSafe(text, primaryLanguage, secondaryLanguage, signal)).translation;
-}
-
 export async function translateTextStreaming(
   text: string,
   primaryLanguage: string,
   secondaryLanguage: string,
   onChunk: (chunk: string) => void,
   signal?: AbortSignal,
-  onLanguages?: (sourceLanguage: string, targetLanguage: string) => void,
+  onLanguages?: (source: string, target: string) => void,
   previewConfig?: Config,
 ): Promise<string> {
   const config = previewConfig ?? getConfig();
-  const apiKeys = getApiKeys();
   assertWithinInputLimit(text, config);
-
-  try {
-    if (isLocalModel(config.aiModel)) {
-      const direction = localDirection(text, primaryLanguage, secondaryLanguage);
-      onLanguages?.(direction.sourceLanguage, direction.targetLanguage);
-      const result = await translateLocal(
-        text,
-        primaryLanguage,
-        secondaryLanguage,
-        signal,
-        onChunk,
-        config.aiModel,
-      );
-      onChunk(result.translation);
-      return result.translation;
-    }
-    if (isCodexModel(config)) {
-      const model = getCodexModelId(config.aiModel);
-      if (!model) {
-        throw new Error('Selected ChatGPT/Codex model is unavailable');
-      }
-      const systemPrompt = buildSystemPrompt(
-        primaryLanguage,
-        secondaryLanguage,
-        config.customPrompt,
-        config.customLanguages,
-      );
-      let fullRaw = '';
-      let headerResolved = false;
-      let languagesEmitted = false;
-      const emitLanguages = (parsed: ParsedTranslation): void => {
-        if (!languagesEmitted && parsed.sourceLanguage && parsed.targetLanguage) {
-          languagesEmitted = true;
-          onLanguages?.(parsed.sourceLanguage, parsed.targetLanguage);
-        }
-      };
-
-      const raw = await runCodexText(
-        model,
-        buildCodexPrompt(systemPrompt, text),
-        getCodexTurnOptions(config),
-        delta => {
-          fullRaw += delta;
-          if (!headerResolved) {
-            if (!isHeaderResolvable(fullRaw)) return;
-            headerResolved = true;
-          }
-          const parsed = parseTranslationOutput(fullRaw);
-          emitLanguages(parsed);
-          onChunk(parsed.translation);
-        },
-        signal,
-      );
-      if (!fullRaw) fullRaw = raw;
-      const parsed = parseTranslationOutput(fullRaw);
-      emitLanguages(parsed);
-      onChunk(parsed.translation);
-      return parsed.translation.trim();
-    }
-
-    // Validate API key
-    const validation = validateApiKey(config, apiKeys);
-    if (!validation.valid) {
-      return validation.error || 'API key validation failed';
-    }
-
-    // Get the model
-    const model = getModel(config, apiKeys);
-    const providerOptions = getOpenAIProviderOptions(config);
-
-    console.log(`Translating text (streaming):`, text.slice(0, 50) + '...');
-
-    // Build system prompt
-    const systemPrompt = buildSystemPrompt(
+  if (isLocalModel(config.aiModel)) {
+    const direction = localDirection(text, primaryLanguage, secondaryLanguage);
+    onLanguages?.(direction.sourceLanguage, direction.targetLanguage);
+    const result = await translateLocal(
+      text,
       primaryLanguage,
       secondaryLanguage,
-      config.customPrompt,
-      config.customLanguages,
+      signal,
+      onChunk,
+      config.aiModel,
     );
-
-    const result = streamText(
-      signal
-        ? {
-            model,
-            system: systemPrompt,
-            prompt: text,
-            ...(providerOptions ? { providerOptions } : {}),
-            abortSignal: signal,
-          }
-        : {
-            model,
-            system: systemPrompt,
-            prompt: text,
-            ...(providerOptions ? { providerOptions } : {}),
-          },
-    );
-
-    let fullRaw = '';
-    let headerResolved = false;
-    let languagesEmitted = false;
-
-    const emitLanguages = (parsed: ParsedTranslation): void => {
-      if (!languagesEmitted && parsed.sourceLanguage && parsed.targetLanguage) {
-        languagesEmitted = true;
-        onLanguages?.(parsed.sourceLanguage, parsed.targetLanguage);
-      }
-    };
-
-    for await (const chunk of result.textStream) {
-      fullRaw += chunk;
-      // Buffer silently until we can tell whether a header line is present.
+    onChunk(result.translation);
+    return result.translation;
+  }
+  let headerResolved = false,
+    languagesEmitted = false;
+  const emit = (raw: string): ParsedTranslation => {
+    const parsed = parseTranslationOutput(raw);
+    if (!languagesEmitted && parsed.sourceLanguage && parsed.targetLanguage) {
+      languagesEmitted = true;
+      onLanguages?.(parsed.sourceLanguage, parsed.targetLanguage);
+    }
+    onChunk(parsed.translation);
+    return parsed;
+  };
+  const raw = await generateModelText(
+    config,
+    buildSystemPrompt(primaryLanguage, secondaryLanguage, config.customPrompt),
+    text,
+    partial => {
       if (!headerResolved) {
-        if (!isHeaderResolvable(fullRaw)) continue;
+        if (!isHeaderResolvable(partial)) return;
         headerResolved = true;
       }
-      const parsed = parseTranslationOutput(fullRaw);
-      emitLanguages(parsed);
-      onChunk(parsed.translation);
-    }
-
-    // Final flush (covers very short outputs that never crossed the buffer
-    // threshold, and guarantees the last body is delivered header-stripped).
-    const finalParsed = parseTranslationOutput(fullRaw);
-    emitLanguages(finalParsed);
-    onChunk(finalParsed.translation);
-
-    console.log('Translation complete (streaming):', finalParsed.translation.slice(0, 50) + '...');
-    return finalParsed.translation.trim();
-  } catch (error) {
-    if (previewConfig || isLocalModel(config.aiModel)) throw error;
-    return handleTranslationError(error, config);
-  }
+      emit(partial);
+    },
+    signal,
+  );
+  return emit(raw).translation.trim();
 }
-
-export { getAIProvider } from './providers.ts';

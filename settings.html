@@ -477,8 +477,15 @@
                 <span class="eyebrow">CONNECTION</span>
                 <p id="connection-summary"></p>
                 <div id="chatgpt-connection" hidden>
-                  <button id="model-login" class="reset-btn">Sign in with ChatGPT</button>
-                  <button id="model-logout" class="reset-btn">Log out</button>
+                  <label for="chatgpt-account">ChatGPT connection</label>
+                  <select id="chatgpt-account"></select>
+                  <p class="help-text">Use your ChatGPT plan by connecting in your browser.</p>
+                  <button id="chatgpt-connect" class="reset-btn">Continue with ChatGPT</button>
+                  <button id="chatgpt-add" class="reset-btn">Add account</button>
+                  <button id="chatgpt-disconnect" class="reset-btn">Sign out</button>
+                  <button id="chatgpt-cancel" class="reset-btn" hidden>Cancel sign-in</button>
+                  <button id="chatgpt-usage" class="text-button">Manage usage</button>
+                  <p id="chatgpt-error" class="help-text" role="status"></p>
                 </div>
                 <details id="api-connection" hidden>
                   <summary>Manage API key</summary>

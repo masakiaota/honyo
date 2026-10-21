@@ -8,7 +8,7 @@ English (canonical) | [日本語](README.ja.md)
 
 Honyo is a desktop translation app with a **DeepL-style workflow**. It translates selected text with your chosen AI model and displays the result in a popup or notification.
 
-This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc/honyo](https://github.com/eukarya-inc/honyo), with ChatGPT sign-in and model-specific reasoning and Fast mode settings.
+This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc/honyo](https://github.com/eukarya-inc/honyo), with ChatGPT sign-in, offline translation, and model-specific reasoning and Fast mode settings.
 
 ![Honyo popup window and tray menu](assets/screenshot.png)
 
@@ -16,7 +16,6 @@ This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc
 
 - **Translate offline on Apple Silicon Macs.** Download a 1.13 GB translation model once; no account or API key is needed. Results stream as they are generated.
 
-- **Translate with your ChatGPT account.** Sign in to use models available to your account through Codex, without setting up an API key.
 - **Choose reasoning effort and Fast mode.** Combining lightweight models with lower reasoning can deliver faster responses.
 - **Choose your AI provider.** Use Claude, GPT, or Gemini with an API key. The API model list refreshes automatically from public catalogs.
 - **Translate in both directions.** Honyo chooses between your primary and secondary languages based on the source text. Back-translation helps you review the result.
@@ -24,12 +23,12 @@ This is [masakiaota's fork](https://github.com/masakiaota/honyo) of [eukarya-inc
 
 ## Requirements and usage
 
-Offline English ↔ Japanese translation requires an Apple Silicon Mac and a one-time model download. Cloud translation requires an internet connection and one of these connections:
+Offline English ↔ Japanese translation requires an Apple Silicon Mac and a one-time model download. Cloud translation requires an internet connection and either a ChatGPT connection or an API key:
 
-| Connection      | What you need                                                        | Usage and billing                                                                                                                                                                                                   |
-| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ChatGPT sign-in | A ChatGPT account with access to Codex                               | Translations use your Codex allowance. Available models and limits depend on your account. See [Codex pricing and limits](https://learn.chatgpt.com/docs/pricing).                                                  |
-| API key         | A key with access to the selected Anthropic, OpenAI, or Google model | The provider's API rates and limits apply. OpenAI API usage is billed separately from a ChatGPT subscription. See [OpenAI authentication and billing](https://learn.chatgpt.com/docs/auth#sign-in-with-an-api-key). |
+| Connection | What you need                                                        | Usage and billing                                                                                                                                                                                                   |
+| ---------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ChatGPT    | An account granting access to its ChatGPT plan                       | Account and app usage limits apply. Check [ChatGPT usage settings](https://chatgpt.com/settings/usage).                                                                                                             |
+| API key    | A key with access to the selected Anthropic, OpenAI, or Google model | The provider's API rates and limits apply. OpenAI API usage is billed separately from a ChatGPT subscription. See [OpenAI authentication and billing](https://learn.chatgpt.com/docs/auth#sign-in-with-an-api-key). |
 
 Cloud translation sends the source text and any custom instructions to the selected AI service. Its data-handling policies apply. Offline translation keeps the source text on your Mac.
 
@@ -91,13 +90,13 @@ Offline translations stream into the popup when streaming is enabled in General 
 
 ### Connect with ChatGPT
 
-1. Open the tray menu → **Settings... → API Keys**.
-2. In **ChatGPT/Codex**, select **Sign in with ChatGPT** and complete the browser sign-in.
-3. Return to Honyo, open the tray's **AI Model** menu, and select a model whose name ends in **(ChatGPT)**.
+1. Open **Settings → Model → ChatGPT → Continue with ChatGPT**.
+2. Sign in in your browser and allow Honyo to use your ChatGPT plan.
+3. Return to Honyo, select a model and **Reasoning effort**, and save. The model list comes from the connected account. Effort initially defaults to `none` on supported models; choose **Model default** to leave it to the model.
 
-The **(ChatGPT)** suffix identifies models that use your Codex access. Other provider entries use API keys.
+Use the connection controls to add or switch accounts and sign out. **Manage usage** opens your plan usage settings. Reaching a limit never silently switches to API-key billing.
 
-Honyo starts the Codex runtime only while it is needed: when a **(ChatGPT)** model is selected or the Model settings window is open. With any other model it stays stopped, so offline and API-key setups keep that memory for the model they use.
+Credentials are encrypted with the OS credential storage and saved in the app's data directory. Translation calls the [public Responses API](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference) directly; no Codex installation or app-server is needed. Your account and workspace must be eligible to share ChatGPT plan usage.
 
 ### Connect with an API key
 
@@ -126,12 +125,12 @@ Use **Pause Translation** in the tray menu to temporarily disable the shortcut, 
 
 Select a model in the tray menu, then open **Settings... → Model**:
 
-- **Reasoning effort** sets how much reasoning the model should use. Leave **Use the model default** selected to use its default behavior.
+- **Reasoning effort** sets how much reasoning the model should use. Leave **Model default** selected to use its default behavior.
 - **Use Fast mode** requests faster processing when the selected model supports it.
 
-Select **Save** to save these preferences for the selected model. Availability depends on the model; ChatGPT model options come from your account's model catalog.
+Select **Save** to save these preferences for the selected model. Availability depends on the model.
 
-Fast mode consumes more of your Codex allowance when using ChatGPT. For supported OpenAI API models, it uses Priority processing with separate API rates. See [OpenAI's Fast mode and billing guidance](https://learn.chatgpt.com/docs/agent-configuration/speed).
+For supported OpenAI API models, Fast mode uses Priority processing with separate API rates. See [OpenAI's Fast mode and billing guidance](https://learn.chatgpt.com/docs/agent-configuration/speed).
 
 ### Translation instructions
 
@@ -152,13 +151,12 @@ The same **Customization** tab lets you add:
 
 ## Troubleshooting
 
-| Symptom                                               | What to check                                                                                                                                         |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The shortcut does nothing                             | Confirm Honyo is running, **Pause Translation** is off, and the text was copied. On macOS, grant Accessibility permission to the app you are running. |
-| An API key is requested after signing in with ChatGPT | Select a model ending in **(ChatGPT)** in **AI Model**.                                                                                               |
-| Translation fails                                     | Check your connection, model access, and the usage limit or billing status of the account used for that model.                                        |
-| The popup does not appear                             | Select **Display Mode → Popup Window**. The default is **Notification & Copy**.                                                                       |
-| A native module fails to build                        | Check the platform prerequisites above. On macOS, verify that Xcode Command Line Tools and Node.js development headers are installed.                 |
+| Symptom                        | What to check                                                                                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The shortcut does nothing      | Confirm Honyo is running, **Pause Translation** is off, and the text was copied. On macOS, grant Accessibility permission to the app you are running. |
+| Translation fails              | Check your connection, model access, and the usage limit or billing status of the account used for that model.                                        |
+| The popup does not appear      | Select **Display Mode → Popup Window**. The default is **Notification & Copy**.                                                                       |
+| A native module fails to build | Check the platform prerequisites above. On macOS, verify that Xcode Command Line Tools and Node.js development headers are installed.                 |
 
 If a locally packaged macOS app keeps requesting Accessibility permission after a rebuild, reset its stored permission:
 
@@ -170,7 +168,7 @@ Then launch the rebuilt Honyo app and enable it again in Accessibility settings.
 
 ## Local data
 
-Settings and API keys are stored in the app's local data directory. API keys are saved in `apikeys.json` as unencrypted JSON. Codex uses the `codex` subdirectory for its local data.
+Settings and API keys are stored in the app's local data directory. API keys are saved in `apikeys.json` as unencrypted JSON.
 
 Console output can include excerpts of copied text. Remove private text and credentials before sharing logs in an issue.
 

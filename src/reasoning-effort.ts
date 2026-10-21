@@ -14,116 +14,78 @@ import {
 export function getSelectedModelInfo(config: Config): AIModelInfo | undefined {
   if (config.aiModel === CUSTOM_MODEL_ID) {
     if (!config.customModel?.model || !config.customModel.provider) return undefined;
-    const known = Object.values(getAvailableModels()).find(
-      model =>
-        model.provider === config.customModel?.provider && model.model === config.customModel.model,
+    return (
+      Object.values(getAvailableModels()).find(
+        model =>
+          model.provider === config.customModel?.provider &&
+          model.model === config.customModel.model,
+      ) ?? {
+        optionsKnown: false,
+        name: config.customModel.model,
+        model: config.customModel.model,
+        provider: config.customModel.provider,
+      }
     );
-    if (known) return known;
-    return {
-      optionsKnown: false,
-      name: config.customModel.model,
-      model: config.customModel.model,
-      provider: config.customModel.provider,
-    };
   }
-
   return getModelInfo(config.aiModel);
 }
 
-export function supportsOpenAIReasoningEffort(modelInfo: AIModelInfo | undefined): boolean {
-  if (modelInfo?.provider !== 'openai' || modelInfo.optionsKnown === false) return false;
-  return /^(gpt-5|o[1-9])(?:[.-]|$)/.test(modelInfo.model);
+/** Exact documented families, with optional dated snapshots; unknown models use their own defaults. */
+export function getReasoningEffortOptions(model: AIModelInfo | undefined): ReasoningEffortOption[] {
+  if (!model || !['openai', 'chatgpt'].includes(model.provider)) return [];
+  const id = model.model.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  if (
+    ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-6-sol', 'gpt-6-luna'].includes(
+      id,
+    )
+  )
+    return OPENAI_REASONING_EFFORTS.map(reasoningEffort => ({ reasoningEffort }));
+  if (['gpt-6-astra', 'gpt-6.1-sol'].includes(id))
+    return OPENAI_REASONING_EFFORTS.filter(effort => effort !== 'none').map(reasoningEffort => ({
+      reasoningEffort,
+    }));
+  return [];
 }
-
-export function supportsOpenAIFastMode(modelInfo: AIModelInfo | undefined): boolean {
-  return (
-    modelInfo?.optionsKnown !== false &&
-    modelInfo?.provider === 'openai' &&
-    /^gpt-5\.6(?:[.-]|$)/.test(modelInfo.model)
-  );
+export function supportsOpenAIReasoningEffort(model: AIModelInfo | undefined): boolean {
+  return getReasoningEffortOptions(model).length > 0;
 }
-
-export function getReasoningEffortOptions(
-  modelInfo: AIModelInfo | undefined,
-): ReasoningEffortOption[] {
-  if (modelInfo?.provider === 'codex') return modelInfo.reasoningEffortOptions ?? [];
-  if (!supportsOpenAIReasoningEffort(modelInfo)) return [];
-  return OPENAI_REASONING_EFFORTS.map(reasoningEffort => ({ reasoningEffort }));
+export function supportsOpenAIFastMode(model: AIModelInfo | undefined): boolean {
+  return model?.provider === 'openai' && getReasoningEffortOptions(model).length > 0;
 }
-
 export function getFastModeServiceTier(
-  modelInfo: AIModelInfo | undefined,
+  model: AIModelInfo | undefined,
 ): ModelServiceTier | undefined {
-  if (modelInfo?.provider === 'codex') {
-    return modelInfo.serviceTiers?.find(tier => tier.name.toLowerCase() === 'fast');
-  }
-  if (!supportsOpenAIFastMode(modelInfo)) return undefined;
-  return { id: 'priority', name: 'Fast' };
+  return supportsOpenAIFastMode(model) ? { id: 'priority', name: 'Fast' } : undefined;
 }
-
-export function getOpenAIReasoningEffort(config: Config): OpenAIReasoningEffort | undefined {
-  const modelInfo = getSelectedModelInfo(config);
-  if (!modelInfo || !supportsOpenAIReasoningEffort(modelInfo)) return undefined;
-  return config.openaiReasoningEfforts?.[modelInfo.model];
+export function getReasoningEffort(
+  config: Config,
+  model = getSelectedModelInfo(config),
+): OpenAIReasoningEffort | undefined {
+  if (!model) return undefined;
+  const options = getReasoningEffortOptions(model);
+  const saved =
+    model.provider === 'chatgpt'
+      ? config.chatgptReasoningEfforts?.[model.model]
+      : model.provider === 'openai'
+        ? config.openaiReasoningEfforts?.[model.model]
+        : undefined;
+  if (saved === null) return undefined; // Explicit model default, distinct from a new selection.
+  if (saved !== undefined)
+    return options.some(option => option.reasoningEffort === saved) ? saved : undefined;
+  return options.some(option => option.reasoningEffort === 'none') ? 'none' : undefined;
 }
-
-export function getSelectedReasoningEffort(config: Config): string | undefined {
-  const modelInfo = getSelectedModelInfo(config);
-  if (modelInfo?.provider === 'codex') {
-    const effort = config.codexReasoningEfforts?.[modelInfo.model];
-    return getReasoningEffortOptions(modelInfo).some(option => option.reasoningEffort === effort)
-      ? effort
-      : undefined;
-  }
-  return getOpenAIReasoningEffort(config);
-}
-
-export function isFastModeEnabled(config: Config): boolean {
-  const modelInfo = getSelectedModelInfo(config);
-  if (!getFastModeServiceTier(modelInfo) || !modelInfo) return false;
-  return modelInfo.provider === 'codex'
-    ? config.codexFastModels?.includes(modelInfo.model) === true
-    : config.openaiFastModels?.includes(modelInfo.model) === true;
-}
-
-export function getCodexTurnOptions(config: Config):
-  | {
-      effort?: string;
-      serviceTier?: string;
-    }
-  | undefined {
-  const modelInfo = getSelectedModelInfo(config);
-  if (modelInfo?.provider !== 'codex') return undefined;
-
-  const effort = getSelectedReasoningEffort(config);
-  const fastServiceTier = isFastModeEnabled(config) ? getFastModeServiceTier(modelInfo) : undefined;
-  if (!effort && !fastServiceTier) return undefined;
+export function getOpenAIRequestOptions(
+  config: Config,
+  model = getSelectedModelInfo(config),
+): {
+  effort?: OpenAIReasoningEffort;
+  serviceTier?: 'priority';
+} {
+  const effort = getReasoningEffort(config, model);
   return {
     ...(effort ? { effort } : {}),
-    ...(fastServiceTier ? { serviceTier: fastServiceTier.id } : {}),
-  };
-}
-
-export function getOpenAIProviderOptions(config: Config):
-  | {
-      openai: {
-        reasoningEffort?: OpenAIReasoningEffort;
-        serviceTier?: 'priority';
-      };
-    }
-  | undefined {
-  const modelInfo = getSelectedModelInfo(config);
-  const reasoningEffort = getOpenAIReasoningEffort(config);
-  const fastMode =
-    modelInfo &&
-    supportsOpenAIFastMode(modelInfo) &&
-    config.openaiFastModels?.includes(modelInfo.model);
-  if (!reasoningEffort && !fastMode) return undefined;
-
-  return {
-    openai: {
-      ...(reasoningEffort ? { reasoningEffort } : {}),
-      ...(fastMode ? { serviceTier: 'priority' as const } : {}),
-    },
+    ...(model && supportsOpenAIFastMode(model) && config.openaiFastModels?.includes(model.model)
+      ? { serviceTier: 'priority' as const }
+      : {}),
   };
 }

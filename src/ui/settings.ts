@@ -3,22 +3,11 @@ import { setupModelSettingsIPC } from './model-settings.ts';
 import { BrowserWindow, ipcMain, app, shell, type IpcMainEvent } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { generateText } from 'ai';
-import {
-  getApiKeys,
-  getConfig,
-  updateConfig,
-  clearPopupSize,
-  type Config,
-} from '../config/index.ts';
+import { getConfig, updateConfig, clearPopupSize, type Config } from '../config/index.ts';
 import { resetPopupSize } from './popup.ts';
-import { getAIProvider } from '../translation/providers.ts';
-import { CUSTOM_MODEL_ID } from '../models.ts';
-import { getModelInfo, refreshModels } from '../models-remote.ts';
+import { generateModelText } from '../translation/providers.ts';
+import { refreshModels } from '../models-remote.ts';
 import { isValidMaxInputCharacters } from '../input-character-limit.ts';
-import { getCodexTurnOptions, getOpenAIProviderOptions } from '../reasoning-effort.ts';
-import { runCodexText, setCodexSettingsOpen } from '../codex/index.ts';
-import { getCodexModelId } from '../codex/models.ts';
 
 // Get __dirname in both ESM and CommonJS
 const getCurrentDir = (): string => {
@@ -105,14 +94,8 @@ export function openSettingsWindow(tab = 'model'): void {
   // rebuilds the tray menu automatically if the list changed.
   void refreshModels();
 
-  // The model settings window is the only place that reaches Codex (sign-in,
-  // account status, catalog, previews), so keep the App Server available while
-  // it is open. On close it stops again unless a Codex model stays selected.
-  setCodexSettingsOpen(true);
-
   settingsWindow.on('closed', () => {
     settingsWindow = null;
-    setCodexSettingsOpen(false);
   });
 }
 
@@ -220,11 +203,6 @@ export function setupSettingsIPC(): void {
           const config = getConfig();
           if (isLocalModel(config.aiModel))
             throw new Error('The offline model only supports translation, not prompt generation.');
-          const apiKeys = getApiKeys();
-          const modelInfo =
-            config.aiModel === CUSTOM_MODEL_ID ? undefined : getModelInfo(config.aiModel);
-          const codexModel = getCodexModelId(config.aiModel);
-
           const systemPrompt = `You are an expert at writing translation instruction prompts.
 Your task is to generate or modify a custom prompt that will be used to guide AI translations.
 
@@ -240,50 +218,7 @@ Rules:
             ? `Current custom prompt:\n${data.currentPrompt}\n\nUser's request: ${data.instruction}`
             : `User's request: ${data.instruction}`;
 
-          if (codexModel) {
-            const text = await runCodexText(
-              codexModel,
-              `${systemPrompt}\n\nDo not use tools.\n\n${userPrompt}`,
-              getCodexTurnOptions(config),
-            );
-            event.reply('custom-prompt-generated', { success: true, prompt: text.trim() });
-            return;
-          }
-
-          // Validate API key
-          let apiKey: string | undefined;
-          if (config.aiModel === CUSTOM_MODEL_ID) {
-            if (!config.customModel?.provider) {
-              event.reply('custom-prompt-generated', {
-                success: false,
-                error: 'Custom model not configured',
-              });
-              return;
-            }
-            apiKey = apiKeys[config.customModel.provider];
-          } else {
-            if (modelInfo && modelInfo.provider !== 'codex' && modelInfo.provider !== 'local') {
-              apiKey = apiKeys[modelInfo.provider];
-            }
-          }
-
-          if (!apiKey) {
-            event.reply('custom-prompt-generated', {
-              success: false,
-              error: 'API key not configured',
-            });
-            return;
-          }
-
-          const model = getAIProvider(config.aiModel, apiKeys, config.customModel);
-          const providerOptions = getOpenAIProviderOptions(config);
-
-          const { text } = await generateText({
-            model,
-            system: systemPrompt,
-            prompt: userPrompt,
-            ...(providerOptions ? { providerOptions } : {}),
-          });
+          const text = await generateModelText(config, systemPrompt, userPrompt);
 
           event.reply('custom-prompt-generated', {
             success: true,

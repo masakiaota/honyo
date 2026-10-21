@@ -18,7 +18,7 @@ export type OpenAIReasoningEffort = (typeof OPENAI_REASONING_EFFORTS)[number];
 export interface Config {
   modelHistory?: Partial<
     Record<
-      'local' | 'codex' | 'openai' | 'anthropic' | 'google',
+      'local' | 'chatgpt' | 'openai' | 'anthropic' | 'google',
       { modelId: string; customModel: string }
     >
   >;
@@ -32,10 +32,9 @@ export interface Config {
   maxInputCharacters: number;
   displayMode: DisplayMode;
   customModel?: CustomModel;
-  openaiReasoningEfforts?: Partial<Record<string, OpenAIReasoningEffort>>;
+  openaiReasoningEfforts?: Partial<Record<string, OpenAIReasoningEffort | null>>;
   openaiFastModels?: string[];
-  codexReasoningEfforts?: Partial<Record<string, string>>;
-  codexFastModels?: string[];
+  chatgptReasoningEfforts?: Partial<Record<string, OpenAIReasoningEffort | null>>;
   customLanguages?: string[];
   enableStreaming?: boolean;
   openAtLogin?: boolean;
