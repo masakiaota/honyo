@@ -106,11 +106,12 @@ it.each(['anthropic', 'google'] as const)(
     const factory = provider === 'anthropic' ? mock.anthropic : mock.google;
     factory.mockReturnValue(() => 'test-provider-model');
     const deadline = new AbortController();
-    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+    const timeoutSignal = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
     const caller = new AbortController();
     const timeout = new DOMException('Request timed out', 'TimeoutError');
     mock.stream.mockImplementation(({ abortSignal }: { abortSignal: AbortSignal }) => ({
-      fullStream: (async function* () {
+      fullStream: (async function* (): AsyncGenerator<{ type: string; text?: string }> {
+        await Promise.resolve();
         yield { type: 'text-delta', text: 'Partial' };
         deadline.abort(timeout);
         expect(abortSignal.aborted).toBe(true);
@@ -123,6 +124,6 @@ it.each(['anthropic', 'google'] as const)(
     ).rejects.toBe(timeout);
     expect(caller.signal.aborted).toBe(false);
     expect(partial).toHaveBeenCalledWith('Partial');
-    expect(AbortSignal.timeout).toHaveBeenCalledWith(120_000);
+    expect(timeoutSignal).toHaveBeenCalledWith(120_000);
   },
 );

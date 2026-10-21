@@ -66,9 +66,10 @@ beforeEach(() => {
     'fetch',
     vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        models: [{ slug: 'test-model', display_name: 'Test', visibility: 'list' }],
-      }),
+      json: () =>
+        Promise.resolve({
+          models: [{ slug: 'test-model', display_name: 'Test', visibility: 'list' }],
+        }),
     }),
   );
 });
@@ -154,11 +155,12 @@ it('stops requests and clears local credentials even if remote sign-out fails', 
 it('preserves the selected account catalog when a previous account refresh fails', async () => {
   const { AuthError } = await import('./oauth.ts');
   const { withChatGPTToken, selectChatGPTAccount, getChatGPTState } = await import('./index.ts');
-  const oldAccount = mock.session.accounts[0]!;
+  const oldAccount = mock.session.accounts[0];
+  if (!oldAccount?.credentials) throw new Error('Missing test account');
   mock.session.accounts.push({
     ...structuredClone(oldAccount),
     id: 'other',
-    credentials: { ...oldAccount.credentials!, expiresAt: Date.now() + 3600_000 },
+    credentials: { ...oldAccount.credentials, expiresAt: Date.now() + 3600_000 },
   });
   const refresh = Promise.withResolvers<never>();
   const started = Promise.withResolvers<void>();
@@ -193,7 +195,8 @@ it.each(['exchange', 'identity'] as const)(
       new Error('offline'),
     );
     await signInChatGPT();
-    const account = mock.session.accounts[0]!;
+    const account = mock.session.accounts[0];
+    if (!account) throw new Error('Missing provisional account');
     expect(account.clientId).toBe('issued');
     expect(mock.session.selectedId).toBe(account.id);
     expect(account.credentials).toBeUndefined();
