@@ -1,4 +1,13 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import {
+  getChatGPTState,
+  subscribeChatGPT,
+  signInChatGPT,
+  signOutChatGPT,
+  selectChatGPTAccount,
+  cancelChatGPTSignIn,
+  refreshChatGPTModels,
+} from '../chatgpt/index.ts';
+import { ipcMain, shell, type BrowserWindow } from 'electron';
 import { z } from 'zod';
 import {
   getConfig,
@@ -16,13 +25,6 @@ import {
   resolveDraft,
 } from '../model-selection.ts';
 import { getSelectedModelInfo } from '../reasoning-effort.ts';
-import {
-  getCodexConnectionState,
-  subscribeCodexConnection,
-  startCodexLogin,
-  initializeCodex,
-  logoutCodex,
-} from '../codex/index.ts';
 import { isLocalModel, LOCAL_MODELS, localDirection } from '../local/model.ts';
 import {
   localSupported,
@@ -40,7 +42,7 @@ import { getTray } from './tray.ts';
 import { createTrayMenu } from './menu.ts';
 
 const draftSchema = z.object({
-  provider: z.enum(['local', 'codex', 'openai', 'anthropic', 'google']),
+  provider: z.enum(['local', 'chatgpt', 'openai', 'anthropic', 'google']),
   modelId: z.string().max(200),
   customModel: z.string().max(200),
   effort: z.string().max(30).nullable(),
@@ -55,11 +57,21 @@ const requestSchema = z.discriminatedUnion('action', [
     text: z.string().trim().min(1),
   }),
   z.object({ action: z.enum(['install', 'delete']), id: z.string() }),
-  z.object({ action: z.enum(['cancel', 'login', 'logout']) }),
+  z.object({ action: z.literal('cancel') }),
   z.object({
     action: z.literal('refresh'),
-    provider: z.enum(['local', 'codex', 'openai', 'anthropic', 'google']).optional(),
+    provider: z.enum(['local', 'chatgpt', 'openai', 'anthropic', 'google']).optional(),
   }),
+  z.object({
+    action: z.enum([
+      'chatgpt-connect',
+      'chatgpt-add',
+      'chatgpt-disconnect',
+      'chatgpt-cancel',
+      'chatgpt-usage',
+    ]),
+  }),
+  z.object({ action: z.literal('chatgpt-select'), id: z.string().max(100) }),
   z.object({
     action: z.literal('key'),
     provider: z.enum(['openai', 'anthropic', 'google']),
@@ -73,11 +85,25 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
   const state = (): object => {
     const config = getConfig();
     const keys = getApiKeys();
-    const account = getCodexConnectionState();
+    const chatgpt = getChatGPTState();
     const selected = getSelectedModelInfo(config);
     const catalog = getAvailableModels();
-    const installed = Object.keys(LOCAL_MODELS).filter(id => localState(id).installed).length;
+    const local = Object.fromEntries(
+      Object.entries(LOCAL_MODELS).map(([id, m]) => [
+        id,
+        {
+          ...localState(id),
+          name: m.name,
+          memory: m.memory,
+          source: m.url.split('/resolve/')[0],
+          license:
+            m.licenseUrl ?? m.url.replace('/resolve/', '/blob/').replace(m.file, 'LICENSE.txt'),
+        },
+      ]),
+    );
+    const installed = Object.values(local).filter(state => state.installed).length;
     return {
+      chatgpt,
       providers: PROVIDERS.map(p => ({
         ...p,
         status:
@@ -87,14 +113,12 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
                 ? `Ready · ${installed} downloaded`
                 : 'Download required'
               : 'Apple Silicon required'
-            : p.id === 'codex'
-              ? account.status === 'connected'
-                ? 'Signed in'
-                : account.status === 'connecting'
-                  ? 'Signing in…'
-                  : account.error
-                    ? 'Connection error'
-                    : 'Not signed in'
+            : p.id === 'chatgpt'
+              ? chatgpt.status === 'connecting'
+                ? 'Connecting…'
+                : chatgpt.sharing
+                  ? 'Connected'
+                  : 'Sign-in required'
               : keyErrors.has(p.id)
                 ? 'Authentication error'
                 : keys[p.id]
@@ -112,21 +136,8 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
       currentLabel: selected?.name ?? config.aiModel,
       history: config.modelHistory ?? {},
       custom: config.customModel ?? null,
-      local: Object.fromEntries(
-        Object.entries(LOCAL_MODELS).map(([id, m]) => [
-          id,
-          {
-            ...localState(id),
-            name: m.name,
-            memory: m.memory,
-            source: m.url.split('/resolve/')[0],
-            license:
-              m.licenseUrl ?? m.url.replace('/resolve/', '/blob/').replace(m.file, 'LICENSE.txt'),
-          },
-        ]),
-      ),
-      busy: busy || Object.keys(LOCAL_MODELS).some(id => localState(id).busy),
-      account: { status: account.status, error: account.error },
+      local,
+      busy: busy || Object.values(local).some(state => state.busy),
       languages: { primary: config.targetLanguage, secondary: config.secondaryLanguage },
     };
   };
@@ -134,9 +145,9 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
     const win = window();
     if (win && !win.isDestroyed()) win.webContents.send('model-settings-state', state());
   };
+  subscribeChatGPT(publish);
   subscribeLocal(publish);
   subscribeModels(publish);
-  subscribeCodexConnection(publish);
   subscribeConfig(() => {
     publish();
     const tray = getTray();
@@ -148,6 +159,14 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
     if (!parsed.success) return { ok: false, error: 'Invalid model settings request.' };
     const request = parsed.data;
     if (request.action === 'state') return { ok: true, state: state() };
+    if (request.action === 'chatgpt-cancel') {
+      cancelChatGPTSignIn();
+      return { ok: true };
+    }
+    if (request.action === 'chatgpt-usage') {
+      await shell.openExternal('https://chatgpt.com/settings/usage');
+      return { ok: true };
+    }
     if (request.action === 'cancel') {
       cancelLocalDownload();
       return { ok: true };
@@ -159,14 +178,19 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
     let touchedLocal = false;
     let saved = false;
     try {
-      if (request.action === 'key') {
+      if (request.action === 'chatgpt-connect' || request.action === 'chatgpt-add') {
+        await signInChatGPT(request.action === 'chatgpt-add');
+        if (getChatGPTState().error) throw new Error(getChatGPTState().error);
+      } else if (request.action === 'chatgpt-disconnect') {
+        await signOutChatGPT();
+      } else if (request.action === 'chatgpt-select') {
+        await selectChatGPTAccount(request.id);
+      } else if (request.action === 'key') {
         updateApiKeys({ [request.provider]: request.key });
         keyErrors.delete(request.provider);
         void refreshModels();
-      } else if (request.action === 'login') await startCodexLogin();
-      else if (request.action === 'logout') await logoutCodex();
-      else if (request.action === 'refresh') {
-        if (request.provider === 'codex') await initializeCodex();
+      } else if (request.action === 'refresh') {
+        if (request.provider === 'chatgpt') await refreshChatGPTModels();
         else await refreshModels(true);
       } else if (request.action === 'install' || request.action === 'delete') {
         if (!isLocalModel(request.id)) throw new Error('Unknown offline model.');
@@ -188,9 +212,9 @@ export function setupModelSettingsIPC(window: () => BrowserWindow | null): void 
           touchedLocal = true;
           await warmLocal(draft.modelId, next.targetLanguage);
           if (localState(draft.modelId).error) throw new Error(localState(draft.modelId).error);
-        } else if (draft.provider === 'codex') {
-          if (getCodexConnectionState().status !== 'connected')
-            throw new Error('Sign in with ChatGPT first.');
+        } else if (draft.provider === 'chatgpt') {
+          if (!getChatGPTState().sharing)
+            throw new Error('Connect ChatGPT and enable plan usage first.');
         } else if (!getApiKeys()[draft.provider])
           throw new Error('Save an API key for this provider first.');
         if (request.action === 'save') {

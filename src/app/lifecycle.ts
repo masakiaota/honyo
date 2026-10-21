@@ -1,9 +1,9 @@
+import { shutdownChatGPT } from '../chatgpt/index.ts';
 import { shutdownLocal } from '../local/index.ts';
 import { app } from 'electron';
 import { stopKeyboardListener } from '../keyboard/index.ts';
 import { destroyTray } from '../ui/tray.ts';
 import { openSetupWindow } from './accessibility.ts';
-import { shutdownCodex } from '../codex/index.ts';
 
 // Prevent multiple instances
 export function setupSingleInstance(): boolean {
@@ -37,8 +37,8 @@ export function setupPlatformSpecific(): void {
 // Cleanup function
 export function cleanupAndExit(): void {
   stopKeyboardListener();
-  shutdownCodex();
   shutdownLocal();
+  shutdownChatGPT();
   destroyTray();
 
   // Wait a bit then force exit
@@ -59,8 +59,8 @@ export function setupShutdownHandlers(): void {
   app.on('before-quit', () => {
     console.log('App is about to quit, cleaning up...');
     stopKeyboardListener();
-    shutdownCodex();
     shutdownLocal();
+    shutdownChatGPT();
   });
 
   // Process termination handling

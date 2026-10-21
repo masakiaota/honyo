@@ -1,3 +1,4 @@
+vi.mock('../chatgpt/index.ts', () => ({ shutdownChatGPT: vi.fn() }));
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
@@ -17,7 +18,6 @@ vi.mock('electron', () => ({
 vi.mock('../keyboard/index.ts', () => ({ stopKeyboardListener: vi.fn() }));
 vi.mock('../ui/tray.ts', () => ({ destroyTray: vi.fn() }));
 vi.mock('./accessibility.ts', () => ({ openSetupWindow: mock.openSetupWindow }));
-vi.mock('../codex/index.ts', () => ({ shutdownCodex: vi.fn() }));
 beforeEach(() => {
   vi.clearAllMocks();
   mock.events.clear();

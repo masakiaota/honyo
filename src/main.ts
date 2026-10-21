@@ -1,3 +1,4 @@
+import { refreshChatGPTModels } from './chatgpt/index.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openSettingsWindow } from './ui/settings.ts';
@@ -15,7 +16,6 @@ import {
   checkAccessibilityPermission,
 } from './app/index.ts';
 import { setupPopupIPC } from './ui/popup.ts';
-import { syncCodexRuntime, watchCodexRuntime } from './codex/index.ts';
 
 // Initialize the app
 function initialize(): void {
@@ -48,18 +48,12 @@ function initialize(): void {
     // Load cached model list (synchronous) before building the tray menu
     loadModelsCache();
 
-    // Start the Codex App Server only when the selected model needs it. A
-    // ChatGPT/Codex model keeps the shortcut path free of process startup work,
-    // while local and API-key models do not pay for the Codex runtime's memory.
-    // The watcher re-checks the committed selection after later model changes.
-    watchCodexRuntime();
-    await syncCodexRuntime();
-
     // Create tray icon
     createTray();
 
     // Refresh the model list in the background; rebuilds the tray menu on change
     void refreshModels();
+    void refreshChatGPTModels();
 
     // Setup IPC for settings window
     setupSettingsIPC();

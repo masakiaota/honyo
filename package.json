@@ -1,6 +1,6 @@
 {
   "name": "honyo",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "main": "src/main.ts",
   "type": "module",
   "engines": {
@@ -71,11 +71,11 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.23",
     "@ai-sdk/google": "^2.0.17",
-    "@ai-sdk/openai": "^2.0.42",
-    "@openai/codex": "^0.152.0",
     "ai": "^5.0.60",
     "dotenv": "^17.2.3",
+    "jose": "^6.1.3",
     "node-llama-cpp": "^3.20.0",
+    "openai": "^7.21.0",
     "uiohook-napi": "^1.5.4",
     "zod": "^4.1.11"
   }
