@@ -51,6 +51,7 @@ export function openSetupWindow(): void {
           complete?.();
           complete = undefined;
           window?.close();
+          if (process.platform === 'darwin') app.setActivationPolicy('accessory');
           return true;
         default:
           throw new Error('Unknown setup action');

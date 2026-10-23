@@ -5,6 +5,7 @@ const mock = vi.hoisted(() => ({
   events: new Map<string, () => void>(),
   ready: Promise.resolve(),
   openSetupWindow: vi.fn(),
+  setActivationPolicy: vi.fn(),
 }));
 vi.mock('electron', () => ({
   app: {
@@ -13,6 +14,7 @@ vi.mock('electron', () => ({
       mock.events.set(event, callback);
     },
     whenReady: (): Promise<void> => mock.ready,
+    setActivationPolicy: mock.setActivationPolicy,
   },
 }));
 vi.mock('../keyboard/index.ts', () => ({ stopKeyboardListener: vi.fn() }));
@@ -21,6 +23,15 @@ vi.mock('./accessibility.ts', () => ({ openSetupWindow: mock.openSetupWindow }))
 beforeEach(() => {
   vi.clearAllMocks();
   mock.events.clear();
+});
+it('configures macOS as a menu bar application', async () => {
+  const { setupPlatformSpecific } = await import('./lifecycle.ts');
+  setupPlatformSpecific();
+  if (process.platform === 'darwin') {
+    expect(mock.setActivationPolicy).toHaveBeenCalledExactlyOnceWith('accessory');
+  } else {
+    expect(mock.setActivationPolicy).not.toHaveBeenCalled();
+  }
 });
 it.each(['second-instance', 'activate'])(
   'waits until ready before opening setup on %s',
