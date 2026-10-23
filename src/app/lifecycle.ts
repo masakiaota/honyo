@@ -27,10 +27,10 @@ export function setupSingleInstance(): boolean {
   return true;
 }
 
-// Hide dock icon on macOS
+// Keep macOS in menu bar application mode.
 export function setupPlatformSpecific(): void {
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.hide();
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy('accessory');
   }
 }
 

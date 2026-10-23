@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({
   openExternal: vi.fn(),
   quit: vi.fn(),
   relaunch: vi.fn(),
+  setActivationPolicy: vi.fn(),
 }));
 vi.mock('electron', () => ({
   app: {
@@ -15,6 +16,7 @@ vi.mock('electron', () => ({
     getPath: (): string => '/Applications/Honyo.app/Contents/MacOS/Honyo',
     quit: mock.quit,
     relaunch: mock.relaunch,
+    setActivationPolicy: mock.setActivationPolicy,
   },
   systemPreferences: { isTrustedAccessibilityClient: (): boolean => mock.trusted },
   shell: { openExternal: mock.openExternal, showItemInFolder: vi.fn() },
@@ -58,6 +60,7 @@ it.skipIf(process.platform !== 'darwin')(
     const pending = checkAccessibilityPermission().then(done);
     const event = { sender: mock.windows[0]?.webContents };
     expect(await invoke(event, 'finish')).toBe(false);
+    expect(mock.setActivationPolicy).not.toHaveBeenCalled();
     expect(done).not.toHaveBeenCalled();
     await invoke(event, 'permission');
     expect(mock.openExternal).toHaveBeenCalled();
@@ -70,13 +73,26 @@ it.skipIf(process.platform !== 'darwin')(
     expect(done).toHaveBeenCalledWith(true);
   },
 );
+it.skipIf(process.platform !== 'darwin')(
+  'returns to accessory mode when finishing a reopened setup window',
+  async () => {
+    mock.trusted = true;
+    const { openSetupWindow } = await import('./accessibility.ts');
+    openSetupWindow();
+    expect(await invoke({ sender: mock.windows[0]?.webContents }, 'finish')).toBe(true);
+    expect(mock.windows[0]?.close).toHaveBeenCalledOnce();
+    expect(mock.setActivationPolicy).toHaveBeenCalledExactlyOnceWith('accessory');
+  },
+);
 it('ignores actions from other windows and reuses the setup window', async () => {
   const { openSetupWindow } = await import('./accessibility.ts');
   openSetupWindow();
   openSetupWindow();
   expect(mock.windows).toHaveLength(1);
   await invoke({ sender: {} }, 'restart');
+  await invoke({ sender: {} }, 'finish');
   expect(mock.relaunch).not.toHaveBeenCalled();
+  expect(mock.setActivationPolicy).not.toHaveBeenCalled();
 });
 
 async function invoke(event: unknown, action: string): Promise<unknown> {

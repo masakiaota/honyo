@@ -25,14 +25,12 @@ function initialize(): void {
     return;
   }
 
-  // Platform specific setup
-  setupPlatformSpecific();
-
   // Setup shutdown handlers
   setupShutdownHandlers();
 
   // When app is ready
   void app.whenReady().then(async () => {
+    setupPlatformSpecific();
     console.log('App ready, starting key listener...');
     console.log('API Key present:', !!process.env.ANTHROPIC_API_KEY);
 
