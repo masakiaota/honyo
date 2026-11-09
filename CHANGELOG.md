@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 0.7.3 (2026-11-10)
+
+### Bug Fixes
+
+* ローカルモデル専用の2,000文字上限を削除し、Maximum Input Characters に統合。
+
 ## [0.7.0](https://github.com/masakiaota/honyo/compare/main-20261005-162529-530ba6e...main) (2026-10-19)
 
 ### Features
