@@ -90,7 +90,7 @@ node scripts/evaluate-mlx.ts local-plamo-3-0.8b /absolute/model/directory
 | PLaMo 3 8B | MLX 4bit | 135 ms | 1,562 ms |
 | PLaMo 3 31B | MLX 4bit | 457 ms | 5,442 ms |
 
-8Bの翻訳完了時間は旧7Bより短文で約26%、長文で約34%短くなった。測定記録と訳文は、ローカルの`output/model-evaluation/comparison/`に保存している。31Bの読み込み修正は重みを共有するモデルだけに適用され、他の3サイズの計算処理は変更していない。
+8Bの翻訳完了時間は旧7Bより短文で約26%、長文で約34%短くなった。31Bの読み込み修正は重みを共有するモデルだけに適用され、他の3サイズの計算処理は変更していない。
 
 訳文の確認では、31Bでも`before September 30`を「9月30日までに」とする期限表現の曖昧さが残った。エラーなく生成できたことと、意味の正確さは分けて判断する。
 
