@@ -24,7 +24,7 @@ uint row = threadgroup_position_in_grid.x * 8 + simdgroup_index_in_threadgroup *
 
 float r0 = 0, r1 = 0, r2 = 0, r3 = 0;
 for (uint k = 0; k < cols; k += 512) {
-    
+
 const device T* xl = x + k + lane * 16;
 float sum = 0;
 float xt[16];
@@ -53,7 +53,7 @@ uint row = threadgroup_position_in_grid.x * 8 + simdgroup_index_in_threadgroup *
 
 float r0 = 0, r1 = 0, r2 = 0, r3 = 0;
 for (uint k = 0; k < cols; k += 512) {
-    
+
 const device T* xl = x + k + lane * 16;
 float xt[16];
 for (uint i = 0; i < 16; ++i) xt[i] = xl[i];
@@ -74,7 +74,7 @@ uint row = threadgroup_position_in_grid.x * 8 + simdgroup_index_in_threadgroup *
 
 float g0 = 0, g1 = 0, g2 = 0, g3 = 0, u0 = 0, u1 = 0, u2 = 0, u3 = 0;
 for (uint k = 0; k < cols; k += 512) {
-    
+
 const device T* xl = x + k + lane * 16;
 float sum = 0;
 float xt[16];
