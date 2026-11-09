@@ -80,13 +80,13 @@ On macOS, allow the app under **System Settings → Privacy & Security → Acces
 2. Once the download is verified, select **Save**. Translation languages and display preferences stay unchanged.
 3. Try the sample text in Settings, or select text anywhere and double-copy as usual.
 
-The two local choices are **Hy-MT2 1.8B · Lightweight** using GGUF Q4_K_M / llama.cpp Metal (1.13 GB download) and **Hy-MT2 7B · Higher quality** using the bundled Swift MLX 4-bit helper (4.24 GB download; 16 GB RAM or more recommended). There is no backend selection. 7B GGUF and 1.8B MLX are not offered; removed IDs have no aliases or automatic migration. See the [MLX architecture, build instructions and evaluation](docs/local-mlx-runtime.md).
+Choose **PLaMo 3 Translate 0.8B, 2B, 8B, or 31B**. All four use MLX 4-bit weights and specialized Metal kernels in the bundled Swift executable. Downloads are approximately 0.98, 2.41, 6.07, and 18.66 GB respectively; these are not runtime memory requirements. See the [architecture and verification instructions](docs/local-mlx-runtime.md).
 
-Model weights stay resident while selected and preload when Honyo starts; there is no idle unload. Switching to a cloud model or deleting the offline model releases them. The fixed 4,096-token context reuses only the instruction prefix between successful requests, not previous source text or translations. Each request has a 2,000-character input limit and a 90-second deadline. GGUF CPU evaluation uses at most two threads; only one local translation runs at once.
+Weights stay resident while selected and preload when Honyo starts. Only one model is resident at a time; switching waits for confirmed process exit. Each translation uses fresh KV caches, without retaining previous source text or translations. The limits are 2,000 input characters, a 4,096-token context, and a 90-second deadline per request.
 
 Models are saved under `~/Library/Application Support/Honyo/models`, outside Git and the application bundle. Downloads use a pinned revision and SHA-256 verification. You can cancel or retry downloads and delete the model in Settings. Interrupted downloads restart from the beginning. No Python installation, model conversion or external inference server is needed.
 
-Offline translations stream into the popup when streaming is enabled in General settings. Custom translation prompts and AI prompt generation are not supported by this translation-only integration. Technical terminology and ambiguous text can still be mistranslated; validation detects empty output, loops, truncation, damaged code/URLs, and some wrong-language output, but cannot prove semantic accuracy. See the [model comparison and actual outputs](docs/local-translation.md).
+Offline translations stream into the popup when streaming is enabled in General settings. Custom translation prompts and AI prompt generation are not supported by this translation-only integration. Technical terminology and ambiguous text can still be mistranslated; validation detects empty output, loops, truncation, damaged code/URLs, and some wrong-language output, but cannot prove semantic accuracy. See the [PLaMo verification instructions](docs/local-mlx-runtime.md).
 
 ### Connect with ChatGPT
 

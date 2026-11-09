@@ -203,6 +203,7 @@ try {
   // the resource executable with the distribution identity when one is provided.
   const stagedExecutable = join(staging, 'honyo-mlx');
   const runtimeLibraries = copySwiftBackDeploymentLibraries(stagedExecutable, staging);
+  cpSync(join(packageDir, 'Licenses', 'PlamoMetal.txt'), join(staging, 'licenses', 'PlamoMetal.txt'));
   const swiftRuntimeNotices = join(staging, 'licenses', 'swift-runtime');
   cpSync(join(packageDir, 'Licenses', 'SwiftRuntime'), swiftRuntimeNotices, { recursive: true });
   const compilerVersion = execFileSync('xcrun', ['swiftc', '--version'], { encoding: 'utf8' });

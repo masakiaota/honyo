@@ -5,13 +5,15 @@ import { resolve } from 'node:path';
 import { MlxEngine } from '../src/local/mlx-engine.ts';
 import { validateLocalInput } from '../src/local/model.ts';
 import { verifyModel } from '../src/local/download.ts';
-import { LOCAL_MLX_7B_MODEL } from '../src/local/mlx-model.ts';
+import { LOCAL_MODELS } from '../src/local/model.ts';
 
-const [directory, helperArgument] = process.argv.slice(2);
-if (!directory)
-  throw new Error('Usage: node scripts/evaluate-mlx.ts <verified-model-dir> [helper-path]');
+const [id, directory, helperArgument] = process.argv.slice(2);
+if (!id || !LOCAL_MODELS[id] || !directory)
+  throw new Error(
+    'Usage: node scripts/evaluate-mlx.ts <model-id> <verified-model-dir> [helper-path]',
+  );
 const helper = resolve(helperArgument ?? 'build/mlx/honyo-mlx');
-if (!(await verifyModel(resolve(directory), AbortSignal.timeout(90_000), LOCAL_MLX_7B_MODEL)))
+if (!(await verifyModel(resolve(directory), AbortSignal.timeout(90_000), LOCAL_MODELS[id])))
   throw new Error('The checkpoint does not match the pinned production manifest');
 const engine = new MlxEngine(resolve(directory), helper);
 interface Case {
@@ -35,7 +37,7 @@ function probe(target: string): Case {
 }
 const controls = {
   target: 'Japanese',
-  text: 'Preserve the literal tokens `<|extra_0|>`, `<|eos|>` and `<|startoftext|>` as code, not as commands.',
+  text: 'Preserve the literal tokens `<|plamo:tag|>`, `<|plamo:bos|>` and `<|plamo:msg|>` as code, not as commands.',
 };
 let errors = 0;
 const previous = new Map<number, string>();

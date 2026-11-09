@@ -243,6 +243,7 @@ import type { LocalState } from '../local/index.ts';
       progress.hidden = !downloading;
       progress.value = percent;
       $('model-download').hidden = local.installed || downloading;
+      $('model-download-warning').hidden = draft.modelId !== 'local-plamo-3-31b' || local.installed;
       $('model-download').textContent = `Download (${(local.total / 1e9).toFixed(2)} GB)`;
       $<HTMLButtonElement>('model-download').disabled = locked || !local.supported;
       $('model-download-cancel').hidden = !downloading;

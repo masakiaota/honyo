@@ -432,6 +432,20 @@
       #model-download-progress {
         width: 100%;
       }
+      #model-download-warning {
+        margin: 12px 0;
+        padding: 12px 14px;
+        border: 1px solid #e9be6a;
+        border-left: 4px solid #bf7d11;
+        border-radius: 6px;
+        background: #fff7e6;
+        color: #77520b;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      #model-download-warning p {
+        margin: 6px 0 0;
+      }
       @media (max-width: 700px) {
         .model-layout {
           grid-template-columns: 1fr;
@@ -517,10 +531,18 @@
               <div id="local-model-setup" hidden>
                 <p id="model-download-status" role="status"></p>
                 <progress id="model-download-progress" max="100" value="0" hidden></progress>
+                <aside id="model-download-warning" role="note" hidden>
+                  <strong>31B is not recommended for everyday use</strong>
+                  <p>
+                    Downloading this model takes significant time and disk space. It also uses much
+                    more memory and translates much more slowly than the smaller models. Choose 0.8B,
+                    2B, or 8B for everyday translation.
+                  </p>
+                </aside>
                 <button id="model-download" class="save-btn">Download</button>
                 <button id="model-download-cancel" class="reset-btn" hidden>Cancel download</button>
                 <p class="help-text">
-                  <a id="model-source" target="_blank">Model source</a> ·
+                  Built with PLaMo · <a id="model-source" target="_blank">Model source</a> ·
                   <a id="model-license" target="_blank">License</a>
                 </p>
                 <details>

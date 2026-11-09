@@ -1,61 +1,95 @@
-# 7B MLXオフライン翻訳
+# PLaMo 3によるローカル翻訳
 
-## 目的と採用範囲
+## 利用者が選ぶもの
 
-Apple Silicon Macの7B翻訳を、常駐モデルの応答速度とメモリの両面から改善する。Pythonの常駐や追加サービスへの接続ではなく、Electron/Nodeから同梱Swift helperを直接起動する。
+翻訳モデルをPLaMo 3 Translateへ統一し、利用者は0.8B、2B、8B、31Bから選ぶ。全サイズでMLX 4bitと専用のMetal処理を共用する。モデルごとに取得、選択、削除ができ、常駐するモデルは1つである。
 
-設定のローカルモデルは **Hy-MT2 1.8B · Lightweight**（GGUF Q4_K_M）と **Hy-MT2 7B · Higher quality**（Swift MLX 4-bit）の2つだけである。backend選択は設けず、7B GGUFと1.8B MLXは提供しない。旧IDの互換aliasや自動移行は行わず、既存の取得済みファイルは自動削除しない。
+| サイズ | ダウンロード容量 | モデルID |
+| --- | ---: | --- |
+| 0.8B | 約0.98 GB | `local-plamo-3-0.8b` |
+| 2B | 約2.41 GB | `local-plamo-3-2b` |
+| 8B | 約6.07 GB | `local-plamo-3-8b` |
+| 31B | 約18.66 GB | `local-plamo-3-31b` |
 
-Q3 GGUFは別の省メモリ候補であるが、この実装では配布メタデータに問題のある第三者Q3チェックポイントを製品へ追加しない。Q3とMLXの研究上の採否は別問題である。
+容量は設定ファイルと語彙を含む取得量で、実行時のメモリ量ではない。ローカルモデルの既定値は0.8Bである。Hy-MTの取得済みファイルは自動削除せず、旧IDを保存している場合は設定画面でPLaMoを選び直す。
 
-## 実行・保存
+この統一で、Hy-MTのモデル定義、GGUF実行系、`node-llama-cpp`、形式による分岐、モデル別の翻訳指示を削除した。Swiftの依存は12パッケージからMLX SwiftとSwift Numericsの2つになった。専用モデルの改善を4サイズへ共通して適用できる構成を目指す。
 
-- Nodeが`honyo-mlx <model-dir>`をshellなしで起動し、JSONLで翻訳する。同一モデルは常駐し、推論を直列化する。アイドル解放や段階的解放は行わない。
-- コンテキストは4096 tokens。出力上限は`min(2048, 4096 - inputTokens - 16)`、最低512 tokensを確保する。入力上限2000文字と既存の英日判定・コード/URL保存検査を維持する。
-- ウォームアップは翻訳指示だけのforward passであり、翻訳文を生成しない。正常終了後は全KV層から原文・出力を除き、実際の評価済みオフセットで制限した連続指示prefixだけを保持する。
-- 原文に含まれる特殊トークン表記は、追加トークンを持たない同一BPEで通常文字列として符号化する。制御IDはprompt builderだけが挿入する。Unicodeを正規化・置換せず、UTF-8 byte-exact roundtripも検証する。
-- 1要求の90秒期限はqueue、起動、ロード、生成を含む。中断、異常終了、不正protocol、無効出力ではhelperを破棄する。生成途中の自動再試行はせず、次の独立した要求で再起動する。
-- 解放時は終了確認後にのみ別モデルを起動する。SIGTERMの後1秒でSIGKILL、さらに終了を確認できなければ置換を拒否し、アプリ再起動を要求する。二重常駐を許さない。
-- stdoutはprotocol専用。Nodeは行長、出力、frame数を制限し、raw helper error、stderr、原文をアプリのエラーやログへ出さない。
+## 重みとGPU処理
 
-モデルは`mlx-community/Hy-MT2-7B-4bit`のrevision `9b7204bdb161490a8ce49ce607c1310cc3fd03ad`。重み、tokenizer、設定、LICENSE等の各assetについてサイズとSHA-256を固定する。全assetの取得・検証後だけ一時ディレクトリから昇格する。破損、不足、中断では不完全モデルを使用せず、別のモデルのファイルを削除しない。モデル選択後の翻訳はネットワークもPythonも不要である。
+[PFNの公式MLX 4bitモデル](https://huggingface.co/pfnet/plamo-3-translate-0.8b-MLX-4bit)を取得する。4bitの行列は64要素ごとのアフィン量子化であり、埋め込み層と出力層は公式ファイルの非量子化状態を保つ。実行時の浮動小数点配列は、専用処理に合わせてFP16へ変換する。追加の量子化は行わない。
 
-モデル重みをアプリ配布物へ入れず、従来どおり設定画面から取得する。LICENSEを同じ固定revisionからダウンロードし、設定のライセンスリンクもそのrevisionへ向ける。
+31Bは`tie_word_embeddings`の設定に従い、埋め込み層の重みを出力層でも共有する。独立した`lm_head.weight`を要求せず、同じ配列を利用する。
 
-## ビルドと配布
+1トークンずつ生成する処理は、[plamo-translate-cli](https://github.com/pfnet/plamo-translate-cli/tree/82788925ce64b5ec15abb25a650ccf4616eff57a/src/plamo_translate/servers/mlx)のMetal実装をSwiftへ移植した。行列積、正規化と残差の加算、SwiGLU、注意機構をまとめ、1層あたり7回のGPU処理で実行する。上流で2B向けに固定されていたquery/KVヘッド数比を、4サイズの設定から決めるよう変更した。プロンプトの一括処理は通常のMLX演算を使う。
 
-`npm run build`はmacOS arm64でアプリビルド後に`npm run build:mlx`を実行する。Swift依存はMLX Swift LM 3.32.3 / swift-transformers 1.3.5とlockfileで固定する。完全なXcode、Swift 6.2以上、Metal Toolchainが開発時に必要である。モデルやPythonの導入はビルドに不要。
+生成中は次のトークンのGPU処理を先に投入し、CPUの待ち時間を減らす。終了時には未完了の処理を待ってからキャッシュを解放する。
 
-生成物は`build/mlx/`。helper、`mlx-swift_Cmlx.bundle/default.metallib`および必要なSwift互換dylibを一緒に扱う。macOSパッケージでは`Contents/Resources/mlx/`へasar外で配置する。helperは実行ファイルの隣のMetalライブラリを明示的に使用し、開発機のDerivedDataへ依存しない。electron-builderにネスト実行ファイルを登録し、開発時生成物にはad-hoc署名を行う。正式配布のDeveloper ID署名・notarizationは既存リリース環境で必要であり、ローカルad-hoc検証と同一視しない。
+改善の判断基準は、利用者が受け取る訳文と応答速度である。各サイズで英日翻訳が成立することを確認し、問題が出た場合に原因とボトルネックを調べる。中間の数値差を揃えるための補正や、起動ごとの比較処理は加えない。
 
-MLX helperのdeployment targetはmacOS 14、アプリのオフライン対象はApple Siliconである。古いmacOSでの実行は別途確認が必要。macOS向け配布物の作成はApple Silicon上で行う。Windows/LinuxのパッケージにはMLX native artifactを同梱しない。
+上流の公開速度はHonyoの速度を表さない。上流CLIの4bit設定は出力層も量子化するため、この実装とは重みの条件が異なる。端末、モデルサイズ、入力長を固定した製品クライアントでの測定が必要である。
 
-統合した`npm run build`とelectron-builderのmacOS arm64 dirパッケージ作成（ad-hoc署名、公証なし）、アプリ全体の`codesign --verify --deep --strict`は成功した。実際の配布ディレクトリにあるElectronを`ELECTRON_RUN_AS_NODE=1`で動かし、asar内の製品クライアントからasar外のhelperを起動して、英日両方向、特殊トークン表記のコード保持、streaming、中断と次要求の復旧を確認した。Metal bundle、Swift互換dylib、依存ライセンス、既存アイコンも配布物内にある。これはアプリの通常起動/UI操作やDeveloper ID署名・公証の検証ではない。
+## 入力と状態の管理
 
-## 再現可能な検証
+翻訳入力はPFML3の`dataset=translation`、`input`、`output lang=ja/en`で組み立てる。PLaMoのunigram語彙をSwiftで処理し、制御トークンは組み立て処理だけが挿入する。原文内の制御トークン表記は普通の文字として扱い、UTF-8が完全に復元できることを確認する。
 
-`npm run lint`、`npm run typecheck`、`npm run format:check`、`npm run test:verbose`でNode側の選択、download、protocol、期限、中断、異常終了、終了確認を検証する。GPU不要のfake processテストを含む。Swiftチェックアウト等の生成物はVitest対象から除外する。
+翻訳ごとのKVキャッシュは使い捨てにする。モデルの重みとコンパイル済みGPU処理だけを保持するため、接頭辞の再利用と巻き戻し処理は不要になった。予備実行では固定の短文を1ステップ処理し、結果を表示せずにキャッシュを解放する。
 
-native unit testは`native/mlx`で以下を実行する。
+英日間の翻訳、2,000文字上限、コードとURLの保持検査を維持する。文脈は4,096トークンで、出力上限は`min(2048, 4096 - inputTokens - 16)`、最低512トークンを確保する。待ち行列、起動、生成を含めて1要求90秒とする。
 
-    xcodebuild -scheme HonyoMlx -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath ../../output/native-mlx/DerivedData -clonedSourcePackagesDirPath ../../output/native-mlx/SourcePackages -onlyUsePackageVersionsFromResolvedFile -disableAutomaticPackageResolution ARCHS=arm64 CODE_SIGNING_ALLOWED=NO MACOSX_DEPLOYMENT_TARGET=14.0 test
+Nodeは実行プログラムを直接起動し、JSONLで通信する。中断、不正な応答、異常終了時にはプロセスを破棄する。終了を確認できるまで別のモデルを読み込まない。プロセスが返した内部エラーや原文はアプリのログへ出さない。
 
-任意の`TEST_RUNNER_HONYO_MLX_TEST_MODEL=<absolute checkpoint directory>`を指定すると、実チェックポイントの全209特殊表記とUnicode/CRLF/NULのbyte-exact検証も行う。未指定時はそのチェックポイント依存テストだけskipする。
+## 取得と配布
 
-製品クライアントの実モデルsmokeは以下で実行する。モデルは明示的に指定し、ユーザー設定やuserDataを変更せず、自動ダウンロードもしない。
+各モデルの重み、設定、語彙、ライセンスには、固定リビジョンのURL、バイト数、SHA-256を持たせる。すべてを検証した後にモデルのディレクトリを公開する。途中で中断した場合は一時ディレクトリを削除する。
 
-    node scripts/evaluate-mlx.ts <verified checkpoint directory> [helper path]
+モデルはアプリへ同梱せず、設定画面から取得する。翻訳時にはPythonもネットワークも使わない。設定画面には`Built with PLaMo`とモデルのライセンスへのリンクを表示する。利用条件は[取得対象のPLaMo Community License](https://huggingface.co/pfnet/plamo-3-translate-0.8b-MLX-4bit/blob/1f9227818908350380fa576794c01f5fbcbf8569/LICENSE/ja)を参照する。
 
-短文20例・長文4例を2巡し、英日両方向の2000文字境界、特殊表記のコード保存、生成中の中断と次要求の復旧を確認する。出力JSONLにはfixtureの原文・訳文を含むため、ローカル評価用とし、利用者のコピー内容を投入して共有しない。
+実行プログラム、Metalライブラリ、Swift互換ライブラリ、依存するコードのライセンスをmacOSアプリの`Contents/Resources/mlx/`へ同梱する。対象はApple SiliconのmacOS 14以降である。正式配布時の署名と公証は既存のリリース手順に従う。
 
-## 評価と限界
+## ビルドと検証
 
-事前の順序反転ペアPoCでは、Q3 GGUF Metalに対しSwift MLX 4bitの全文完了中央値は短文239.93→182.40 ms、長文3010.74→2381.51 msだった。短文TTFTの数msだけでなく、全文完了時間を重視する。Q3のMetal used 4189 MiBとMLX active 4161.2 MiB / peak 4774.3 MiBは別指標であり、同一測定値や加算可能な値ではない。
+開発時には完全なXcode、Swift 6.2以上、Metal Toolchainが必要である。`npm run build`はmacOS arm64でネイティブ実行プログラムもビルドする。MLXだけを更新する場合は`npm run build:mlx`を使う。ビルドはモデルを取得しない。
 
-製品クライアントでも同じ24例×2巡をApple Silicon / macOS 27 / Xcode 27で実測し、48翻訳のエラー・echo・巡回間の訳文差はいずれも0、2000文字の英日両方向と特殊表記の境界3例、および中断後の復旧も成功した。製品クライアントの最初のテキストchunk/全文完了中央値は短文46.22/186.28 ms、長文132.23/2396.94 msだった。これはNode側のchunk受信時刻であり、PoCの生成token callback TTFTと同一指標ではない。初回ロード・方向別cold compilationはwarm測定から除外した。
+```sh
+npm run typecheck
+npm run lint
+npm run format:check
+npm run test:verbose
+swift test --package-path native/mlx --filter HonyoMlxCoreTests
+npm run build
+```
 
-24例のAI定性評価は人間による品質検証を代替しない。専門用語・期限の意味・量子化の品質差には未解決の問題がある。製品fixtureの短文でも`idempotent`を「再実行可能」とする訳や、`before September 30`を「9月30日までに」とする境界の曖昧化が残った（いずれも事前のGGUF評価でも見られた問題）。出力検査はコード・URL欠落やecho、長さ切断等を検出するが、訳の正しさ全般を保証しない。低bit MLX、電力、古いmacOS、正式署名/notarizationはこのPRで実証した事項ではない。
+実モデルの検証には、取得済みディレクトリとモデルIDを明示する。以下は0.8Bの例である。
 
-## 後片付け
+```sh
+HONYO_MLX_TEST_MODEL=/absolute/model/directory \
+  swift test --package-path native/mlx --filter HonyoMlxCoreTests
 
-PoCモデル・Python環境・既存の未追跡ファイル・ユーザーのモデルはこの実装で削除しない。`output/model-evaluation/`と`output/native-mlx/`の取得物、DerivedData、評価ログ、および`build/`/`dist/`は再生成可能な検証・ビルド生成物である。生成物の削除はユーザーの指示後に行う。追跡する`native/mlx/`、ビルド/評価スクリプト、製品コードはPoC削除対象にしない。
+node scripts/evaluate-mlx.ts local-plamo-3-0.8b /absolute/model/directory
+```
+
+評価スクリプトは全ファイルを検証し、短文20例と長文4例を2巡する。2,000文字境界、特殊トークン表記、中断後の復旧も検証する。ユーザー設定を変更せず、モデルも取得しない。出力には試験文の原文と訳文が含まれる。
+
+この検査で意味の正確さ全般は判定できない。専門用語、否定、期限、指示に見える原文を含め、訳文そのものの確認が必要である。
+
+## 今回の確認範囲
+
+0.8B、2B、8B、31Bで英日両方向の翻訳を確認した。31Bの実測で見つかった重み共有設定への未対応は、読み込み処理で修正した。修正後の31Bと8Bで両方向の翻訳を確認し、macOS arm64のアプリも再作成した。型検査、静的解析、259件のNodeテストは、この読み込み修正に先立って成功している。
+
+2026年11月9日から10日にかけて、Apple M5 Ultra・96 GiBの同じ端末で、インストール済みの旧Honyoと新版を比較した。短文20例と長文4例を各2回、1モデルずつ実行し、各モデル48回、計288回の翻訳がエラーなく完了した。下表は予備実行後、製品クライアントの翻訳呼び出しから最終結果までの時間の中央値であり、初期読み込みは含まない。モデルと実行方式を含む置き換え全体の比較である。
+
+| モデル | 形式 | 短文 | 長文 |
+| --- | --- | ---: | ---: |
+| 旧Hy-MT2 1.8B | GGUF Q4_K_M | 103 ms | 1,345 ms |
+| 旧Hy-MT2 7B | MLX 4bit | 183 ms | 2,353 ms |
+| PLaMo 3 0.8B | MLX 4bit | 28 ms | 314 ms |
+| PLaMo 3 2B | MLX 4bit | 62 ms | 702 ms |
+| PLaMo 3 8B | MLX 4bit | 135 ms | 1,562 ms |
+| PLaMo 3 31B | MLX 4bit | 457 ms | 5,442 ms |
+
+8Bの翻訳完了時間は旧7Bより短文で約26%、長文で約34%短くなった。測定記録と訳文は、ローカルの`output/model-evaluation/comparison/`に保存している。31Bの読み込み修正は重みを共有するモデルだけに適用され、他の3サイズの計算処理は変更していない。
+
+訳文の確認では、31Bでも`before September 30`を「9月30日までに」とする期限表現の曖昧さが残った。エラーなく生成できたことと、意味の正確さは分けて判断する。
+
+実装中に追加した丸め補正、起動時の数値比較、専用の数値一致テストは削除した。追加の原因調査は、訳文や動作に問題が出た場合に行う。

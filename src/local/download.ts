@@ -35,7 +35,6 @@ export async function verifyModel(
   signal?: AbortSignal,
   model: LocalModel = LOCAL_MODEL,
 ): Promise<boolean> {
-  if (!model.assets) return verifyFile(path, model, signal);
   validateAssets(model);
   for (const asset of model.assets) {
     if (!(await verifyFile(join(path, asset.file), asset, signal))) return false;
@@ -109,7 +108,7 @@ export async function downloadModel(
   progress: (bytes: number, verifying: boolean) => void,
   model: LocalModel = LOCAL_MODEL,
 ): Promise<string> {
-  if (model.assets) validateAssets(model);
+  validateAssets(model);
   await mkdir(directory, { recursive: true });
   const destination = join(directory, model.file);
   if (await verifyModel(destination, signal, model)) return destination;
@@ -118,36 +117,25 @@ export async function downloadModel(
     throw new Error(
       `Not enough disk space. Free at least ${((model.bytes + 256 * 1024 * 1024) / 1e9).toFixed(1)} GB and try again.`,
     );
-  if (model.assets) {
-    const root = resolve(directory);
-    const final = resolve(destination);
-    if (dirname(final) !== root) throw new Error('Invalid offline model destination.');
-    const staging = await mkdtemp(join(root, `.${model.file}.partial-`));
-    if (dirname(resolve(staging)) !== root) throw new Error('Invalid staging destination.');
-    try {
-      let completed = 0;
-      for (const asset of model.assets) {
-        await downloadFile(join(staging, asset.file), asset, signal, (bytes, verifying) =>
-          progress(completed + bytes, verifying),
-        );
-        completed += asset.bytes;
-      }
-      signal.throwIfAborted();
-      // Only this known model directory may be replaced, and only after verification.
-      await rm(final, { recursive: true, force: true });
-      await rename(staging, final);
-      return final;
-    } finally {
-      await rm(staging, { recursive: true, force: true });
-    }
-  }
-  const partial = destination + '.partial';
+  const root = resolve(directory);
+  const final = resolve(destination);
+  if (dirname(final) !== root) throw new Error('Invalid offline model destination.');
+  const staging = await mkdtemp(join(root, `.${model.file}.partial-`));
+  if (dirname(resolve(staging)) !== root) throw new Error('Invalid staging destination.');
   try {
-    await downloadFile(partial, model, signal, progress);
+    let completed = 0;
+    for (const asset of model.assets) {
+      await downloadFile(join(staging, asset.file), asset, signal, (bytes, verifying) =>
+        progress(completed + bytes, verifying),
+      );
+      completed += asset.bytes;
+    }
     signal.throwIfAborted();
-    await rename(partial, destination);
-    return destination;
+    // Only this known model directory may be replaced, and only after verification.
+    await rm(final, { recursive: true, force: true });
+    await rename(staging, final);
+    return final;
   } finally {
-    await rm(partial, { force: true });
+    await rm(staging, { recursive: true, force: true });
   }
 }
