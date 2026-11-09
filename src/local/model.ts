@@ -27,8 +27,6 @@ export function getLocalModel(id = LOCAL_MODEL_ID): LocalModel {
   return model;
 }
 
-export const LOCAL_MAX_CHARACTERS = 2000;
-
 export interface LocalResult {
   translation: string;
   sourceLanguage: string;
@@ -69,8 +67,6 @@ export function localDirection(
 
 export function validateLocalInput(text: string): void {
   if (!text.trim()) throw new Error('Enter text to translate.');
-  if ([...text].length > LOCAL_MAX_CHARACTERS)
-    throw new Error('Offline translation supports up to 2,000 characters. Please split the text.');
 }
 
 export function validateLocalOutput(text: string, source = ''): void {

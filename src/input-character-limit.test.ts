@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   exceedsInputCharacterLimit,
-  getEffectiveMaxInputCharacters,
   getInputCharacterLimitMessage,
   isValidMaxInputCharacters,
 } from './input-character-limit.ts';
-import { LOCAL_MAX_CHARACTERS } from './local/model.ts';
 
 describe('isValidMaxInputCharacters', () => {
   it.each([1, 4096, Number.MAX_SAFE_INTEGER])('accepts %s', value => {
@@ -32,22 +30,6 @@ describe('exceedsInputCharacterLimit', () => {
   it('counts Unicode characters instead of UTF-16 code units', () => {
     expect(exceedsInputCharacterLimit('😀', 1)).toBe(false);
     expect(exceedsInputCharacterLimit('😀😀', 1)).toBe(true);
-  });
-});
-
-describe('getEffectiveMaxInputCharacters', () => {
-  it('returns the configured limit for cloud models', () => {
-    expect(getEffectiveMaxInputCharacters(4096, 'openai:gpt-5')).toBe(4096);
-    expect(getEffectiveMaxInputCharacters(10000, 'openai:gpt-5')).toBe(10000);
-  });
-
-  it('caps offline models at the local hard limit', () => {
-    expect(getEffectiveMaxInputCharacters(4096, 'local-plamo-3-0.8b')).toBe(LOCAL_MAX_CHARACTERS);
-    expect(getEffectiveMaxInputCharacters(10000, 'local-plamo-3-31b')).toBe(LOCAL_MAX_CHARACTERS);
-  });
-
-  it('respects a smaller configured limit even for offline models', () => {
-    expect(getEffectiveMaxInputCharacters(500, 'local-plamo-3-0.8b')).toBe(500);
   });
 });
 
