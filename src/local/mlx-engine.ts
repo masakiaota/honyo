@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { translationInstruction } from './prompt.ts';
 import { localDirection, validateLocalInput, validateLocalOutput } from './model.ts';
 import type { LocalResult } from './model.ts';
 
@@ -181,7 +180,6 @@ export class MlxEngine {
           id: operation.id,
           op,
           target,
-          instruction: translationInstruction(target),
           ...(source === undefined ? {} : { text: source }),
         };
         helper.child.stdin.write(JSON.stringify(request) + '\n', error => {
@@ -314,7 +312,13 @@ export class MlxEngine {
     if (!helper.isReady) {
       if (frame.type === 'startup-error' && typeof frame.error === 'string' && frame.error.trim())
         throw new Error('The native MLX helper could not load the offline model.');
-      if (frame.type !== 'ready' || frame.protocol !== 1 || frame.modelType !== 'hunyuan_v1_dense')
+      if (
+        frame.type !== 'ready' ||
+        frame.protocol !== 1 ||
+        frame.modelType !== 'plamo3' ||
+        frame.decoder !== 'metal' ||
+        frame.contextSize !== 4096
+      )
         throw protocolError();
       helper.isReady = true;
       helper.resolveReady();
@@ -367,7 +371,6 @@ export class MlxEngine {
         frame.maxTokens < 512
       )
         throw protocolError();
-      // MLXLMCommon GenerateStopReason (mlx-swift-lm 3.32.3): stop, length, cancelled.
       if (frame.stopReason === 'length' || frame.outputTokens === frame.maxTokens)
         throw new Error('Translation reached its length limit. Please split the text and retry.');
       if (frame.stopReason !== 'stop' || frame.maxTokens === 0) throw protocolError();

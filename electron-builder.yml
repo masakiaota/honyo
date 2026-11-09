@@ -20,8 +20,6 @@ extraMetadata:
   type: commonjs
 asar: true
 asarUnpack:
-  - node_modules/@node-llama-cpp/**/*
-  - node_modules/node-llama-cpp/**/*
   - build/native/**/*.node
   - node_modules/uiohook-napi/**/*
 extraResources:

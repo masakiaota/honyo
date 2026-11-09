@@ -1,6 +1,6 @@
-import { LOCAL_MLX_7B_MODEL, LOCAL_MLX_7B_MODEL_ID } from './mlx-model.ts';
+import { PLAMO_MODELS } from './plamo-models.ts';
 
-export const LOCAL_MODEL_ID = 'local-hy-mt-1.8b';
+export const LOCAL_MODEL_ID = 'local-plamo-3-0.8b';
 export interface LocalModelAsset {
   file: string;
   bytes: number;
@@ -11,27 +11,13 @@ export interface LocalModel {
   name: string;
   file: string;
   bytes: number;
-  sha256: string;
-  url: string;
   memory: string;
-  template: 'hy18' | 'hy7';
-  engine?: 'mlx';
-  assets?: readonly LocalModelAsset[];
-  licenseUrl?: string;
+  sourceUrl: string;
+  licenseUrl: string;
+  assets: readonly LocalModelAsset[];
 }
-export const LOCAL_MODEL: LocalModel = {
-  name: 'Hy-MT2 1.8B · Lightweight',
-  memory: 'About 1.6 GB memory · Fastest',
-  template: 'hy18',
-  file: 'Hy-MT2-1.8B-Q4_K_M.gguf',
-  bytes: 1133080448,
-  sha256: 'dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699',
-  url: 'https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/a0c709d9fac510f2c807aa3af52872340dc37a4a/Hy-MT2-1.8B-Q4_K_M.gguf',
-};
-export const LOCAL_MODELS: Record<string, LocalModel> = {
-  [LOCAL_MODEL_ID]: LOCAL_MODEL,
-  [LOCAL_MLX_7B_MODEL_ID]: LOCAL_MLX_7B_MODEL,
-};
+export const LOCAL_MODELS: Record<string, LocalModel> = PLAMO_MODELS;
+export const LOCAL_MODEL = getLocalModel();
 export function isLocalModel(id: string): boolean {
   return Object.hasOwn(LOCAL_MODELS, id);
 }

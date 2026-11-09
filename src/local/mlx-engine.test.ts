@@ -5,18 +5,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const fake = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn: fake.spawn }));
 import { MlxEngine } from './mlx-engine.ts';
-import { translationInstruction } from './prompt.ts';
 import type { LocalResult } from './model.ts';
 
 interface Request {
   id: string;
   op: 'warmup' | 'translate';
   target: string;
-  instruction: string;
   text?: string;
 }
 
-const READY = { type: 'ready', protocol: 1, modelType: 'hunyuan_v1_dense' };
+const READY = {
+  type: 'ready',
+  protocol: 1,
+  modelType: 'plamo3',
+  decoder: 'metal',
+  contextSize: 4096,
+};
 
 class Helper extends EventEmitter {
   pid: number | undefined = 123;
@@ -124,7 +128,6 @@ it('spawns the native helper directly and stays resident across warmup, translat
     id: warmRequest.id,
     op: 'warmup',
     target: 'Japanese',
-    instruction: translationInstruction('Japanese'),
   });
   expect(warmRequest).not.toHaveProperty('text');
   helper.result(warmRequest);
@@ -141,11 +144,11 @@ it('spawns the native helper directly and stays resident across warmup, translat
     targetLanguage: 'English',
   });
   await value.warmup('English');
-  expect(helper.requests.map(request => request.instruction)).toEqual([
-    translationInstruction('Japanese'),
-    translationInstruction('Japanese'),
-    translationInstruction('English'),
-    translationInstruction('English'),
+  expect(helper.requests.map(request => request.target)).toEqual([
+    'Japanese',
+    'Japanese',
+    'English',
+    'English',
   ]);
   expect(new Set(helper.requests.map(request => request.id)).size).toBe(4);
   await vi.advanceTimersByTimeAsync(300_000);
@@ -405,6 +408,8 @@ it.each([
   { ...READY, protocol: 2 },
   { ...READY, protocol: '1' },
   { ...READY, modelType: 'llama' },
+  { ...READY, decoder: 'generic' },
+  { ...READY, contextSize: 32768 },
   { ...READY, protocol: undefined },
   { type: 'startup-error', error: 123 },
   { type: 'startup-error', error: '' },
@@ -432,7 +437,7 @@ it('redacts startup errors and bounded stderr rather than returning copied text'
 });
 
 it.each([
-  { type: 'ready', protocol: 1, modelType: 'hunyuan_v1_dense' },
+  { type: 'ready', protocol: 1, modelType: 'plamo3' },
   { type: 'chunk', text: 123 },
   { type: 'chunk', id: 'wrong', text: 'secret' },
   { type: 'error', error: 123 },

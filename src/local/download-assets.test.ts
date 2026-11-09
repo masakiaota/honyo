@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { downloadModel, verifyModel } from './download.ts';
 import type { LocalModel } from './model.ts';
 
-const contents = ['weights', '{"model_type":"hunyuan_v1_dense"}', 'tokenizer', 'license'];
-const files = ['model.safetensors', 'config.json', 'tokenizer.json', 'LICENSE.txt'];
+const contents = ['weights', '{"model_type":"plamo3"}', 'tokenizer', 'license'];
+const files = ['model.safetensors', 'config.json', 'tokenizer.jsonl', 'LICENSE.txt'];
 const assets = files.map((file, index) => {
   const data = contents[index] ?? '';
   return {
@@ -21,11 +21,9 @@ const model: LocalModel = {
   name: 'MLX test',
   file: 'mlx-pinned',
   bytes: assets.reduce((sum, asset) => sum + asset.bytes, 0),
-  sha256: assets[0]?.sha256 ?? '',
-  url: assets[0]?.url ?? '',
+  sourceUrl: 'https://example.test/model',
+  licenseUrl: 'https://example.test/license',
   memory: 'test',
-  template: 'hy7',
-  engine: 'mlx',
   assets,
 };
 let directory: string;
@@ -53,7 +51,7 @@ it('installs all pinned assets as one model and verifies every sidecar before re
   expect(progress).toHaveBeenLastCalledWith(model.bytes, true);
   await downloadModel(directory, new AbortController().signal, progress, model);
   expect(fetch).toHaveBeenCalledTimes(assets.length);
-  await writeFile(join(path, 'tokenizer.json'), 'bad-token');
+  await writeFile(join(path, 'tokenizer.jsonl'), 'bad-token');
   expect(await verifyModel(path, undefined, model)).toBe(false);
   await downloadModel(directory, new AbortController().signal, progress, model);
   expect(await verifyModel(path, undefined, model)).toBe(true);
