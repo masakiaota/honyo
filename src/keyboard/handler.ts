@@ -4,7 +4,6 @@ import { translateTextDetailed, translateTextStreaming } from '../translation/in
 import { getConfig, getPausedState } from '../config/index.ts';
 import {
   exceedsInputCharacterLimit,
-  getEffectiveMaxInputCharacters,
   getInputCharacterLimitMessage,
 } from '../input-character-limit.ts';
 import { setTrayIcon } from '../ui/tray.ts';
@@ -63,7 +62,7 @@ export function setupKeyboardHandler(): void {
             }
 
             const config = getConfig();
-            const limit = getEffectiveMaxInputCharacters(config.maxInputCharacters, config.aiModel);
+            const limit = config.maxInputCharacters;
             if (exceedsInputCharacterLimit(text, limit)) {
               new Notification({
                 title: 'Input Character Limit Exceeded',

@@ -5,7 +5,6 @@ import type { Config } from '../config/types.ts';
 import { generateModelText } from './providers.ts';
 import {
   exceedsInputCharacterLimit,
-  getEffectiveMaxInputCharacters,
   getInputCharacterLimitMessage,
 } from '../input-character-limit.ts';
 import { parseTranslationOutput, isHeaderResolvable, type ParsedTranslation } from './parse.ts';
@@ -43,7 +42,7 @@ ${customPromptSection}`.trim();
 }
 
 function assertWithinInputLimit(text: string, config: Config): void {
-  const limit = getEffectiveMaxInputCharacters(config.maxInputCharacters, config.aiModel);
+  const limit = config.maxInputCharacters;
   if (exceedsInputCharacterLimit(text, limit))
     throw new Error(getInputCharacterLimitMessage(limit));
 }

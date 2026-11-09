@@ -82,7 +82,7 @@ On macOS, allow the app under **System Settings → Privacy & Security → Acces
 
 Choose **PLaMo 3 Translate 0.8B, 2B, 8B, or 31B**. All four use MLX 4-bit weights and specialized Metal kernels in the bundled Swift executable. Downloads are approximately 0.98, 2.41, 6.07, and 18.66 GB respectively; these are not runtime memory requirements. See the [architecture and verification instructions](docs/local-mlx-runtime.md).
 
-Weights stay resident while selected and preload when Honyo starts. Only one model is resident at a time; switching waits for confirmed process exit. Each translation uses fresh KV caches, without retaining previous source text or translations. The limits are 2,000 input characters, a 4,096-token context, and a 90-second deadline per request.
+Weights stay resident while selected and preload when Honyo starts. Only one model is resident at a time; switching waits for confirmed process exit. Each translation uses fresh KV caches, without retaining previous source text or translations. The input character limit follows the Maximum Input Characters setting shared by all models. A 4,096-token context and a 90-second deadline per request still apply.
 
 Models are saved under `~/Library/Application Support/Honyo/models`, outside Git and the application bundle. Downloads use a pinned revision and SHA-256 verification. You can cancel or retry downloads and delete the model in Settings. Interrupted downloads restart from the beginning. No Python installation, model conversion or external inference server is needed.
 

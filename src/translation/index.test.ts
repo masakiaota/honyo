@@ -4,6 +4,7 @@ const mock = vi.hoisted(() => ({ generate: vi.fn(), config: {} as Config }));
 vi.mock('../config/index.ts', () => ({ getConfig: (): Config => mock.config }));
 vi.mock('../local/index.ts', () => ({ translateLocal: vi.fn() }));
 vi.mock('./providers.ts', () => ({ generateModelText: mock.generate }));
+import { translateLocal } from '../local/index.ts';
 import { translateTextDetailed, translateTextStreaming } from './index.ts';
 beforeEach(() => {
   vi.clearAllMocks();
@@ -89,3 +90,36 @@ it('keeps non-streaming translation and prompt instructions unchanged', async ()
   });
   expect(mock.generate.mock.calls[0]?.[1]).toContain('Additional instructions:\nKeep names');
 });
+
+it.each(['chatgpt:gpt-6-luna', 'local-plamo-3-0.8b', 'local-plamo-3-31b'])(
+  'uses the configured input limit for %s in both translation modes',
+  async aiModel => {
+    mock.config.aiModel = aiModel;
+    mock.generate.mockResolvedValue('[English -> Japanese]\n翻訳');
+    vi.mocked(translateLocal).mockResolvedValue({
+      translation: '翻訳',
+      sourceLanguage: 'English',
+      targetLanguage: 'Japanese',
+    });
+    for (const limit of [500, 4096]) {
+      mock.config.maxInputCharacters = limit;
+      const input = 'a'.repeat(limit);
+      await expect(translateTextDetailed(input, 'Japanese', 'English')).resolves.toMatchObject({
+        translation: '翻訳',
+      });
+      await expect(translateTextStreaming(input, 'Japanese', 'English', vi.fn())).resolves.toBe(
+        '翻訳',
+      );
+      vi.clearAllMocks();
+      const message = `Input exceeds the character limit. Please reduce the input to ${limit} characters or fewer.`;
+      await expect(translateTextDetailed(input + 'a', 'Japanese', 'English')).rejects.toThrow(
+        message,
+      );
+      await expect(
+        translateTextStreaming(input + 'a', 'Japanese', 'English', vi.fn()),
+      ).rejects.toThrow(message);
+      expect(mock.generate).not.toHaveBeenCalled();
+      expect(translateLocal).not.toHaveBeenCalled();
+    }
+  },
+);

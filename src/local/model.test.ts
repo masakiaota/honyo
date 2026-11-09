@@ -19,9 +19,8 @@ it('rejects unsupported language settings', () => {
   expect(() => localDirection('Hello', 'French', 'Japanese')).toThrow();
   expect(() => localDirection('Hello', 'English', 'English')).toThrow();
 });
-it('limits input by Unicode characters without silently truncating', () => {
-  expect(() => validateLocalInput('a'.repeat(2000))).not.toThrow();
-  expect(() => validateLocalInput('a'.repeat(2001))).toThrow();
+it('allows long input and rejects blank input', () => {
+  expect(() => validateLocalInput('a'.repeat(4096))).not.toThrow();
   expect(() => validateLocalInput('   ')).toThrow();
 });
 it('rejects empty and looping output', () => {

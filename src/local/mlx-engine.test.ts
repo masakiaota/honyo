@@ -232,7 +232,6 @@ it('does not spawn for pre-aborted, invalid input, direction, or warmup targets'
     'Already cancelled',
   );
   expect(() => value.translate('', 'Japanese', 'English')).toThrow('Enter text');
-  expect(() => value.translate('x'.repeat(2001), 'Japanese', 'English')).toThrow('2,000');
   expect(() => value.translate('Hello', 'French', 'English')).toThrow('English ↔ Japanese');
   await expect(value.warmup('French')).rejects.toThrow('English ↔ Japanese');
   expect(fake.spawn).not.toHaveBeenCalled();
