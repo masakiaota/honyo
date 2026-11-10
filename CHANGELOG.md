@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 0.7.4 (2026-11-10)
+
+### Bug Fixes
+
+* 設定画面に残っていた、ローカルモデルを2,000文字に制限する古い説明を削除。
+
 ## 0.7.3 (2026-11-10)
 
 ### Bug Fixes
