@@ -50,7 +50,6 @@ public struct HelperRequest: Decodable, Sendable {
         }
         target = try values.decode(String.self, forKey: .target)
         text = try values.decodeIfPresent(String.self, forKey: .text)
-        guard !id.isEmpty, id.utf8.count <= 1024 else { throw HelperError("Invalid request id") }
         guard target == "English" || target == "Japanese" else { throw HelperError("Unsupported target") }
         if op == .translate {
             guard let text, !text.isEmpty else { throw HelperError("Translation requires nonempty text") }

@@ -49,7 +49,6 @@ struct Helper {
                 do {
                     let request = try JSONDecoder().decode(HelperRequest.self, from: data)
                     if request.op == .exit { return }
-                    if request.op == .cancel { continue }
                     if channel.isCancelled(id) {
                         emit(["type": "cancelled", "id": id])
                         continue

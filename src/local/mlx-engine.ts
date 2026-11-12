@@ -90,7 +90,6 @@ export class MlxEngine {
   private helper: Helper | undefined;
   private tail: Promise<void> = Promise.resolve();
   private stopping: Promise<void> = Promise.resolve();
-  private generation = 0;
   private readonly operations = new Set<Operation>();
 
   private readonly modelPath: string;
@@ -123,7 +122,6 @@ export class MlxEngine {
 
   release(): Promise<void> {
     // Invalidate queued calls immediately, rather than waiting behind a blocked GPU operation.
-    ++this.generation;
     for (const operation of this.operations) this.finish(operation, releasedError());
     if (this.helper) this.discard(this.helper, releasedError());
     return Promise.all([this.tail, this.stopping]).then(() => undefined);
@@ -142,7 +140,6 @@ export class MlxEngine {
           ? signal.reason
           : new Error('Offline translation cancelled.'),
       );
-    const generation = this.generation;
     const deferred = Promise.withResolvers<string>();
     const operation: Operation = {
       id: randomUUID(),
@@ -180,10 +177,6 @@ export class MlxEngine {
     };
     const run = async (): Promise<void> => {
       if (operation.done) return;
-      if (generation !== this.generation) {
-        this.finish(operation, releasedError());
-        return;
-      }
       this.active = operation;
       let helper: Helper | undefined;
       try {

@@ -15,8 +15,8 @@ let engine: MlxEngine | undefined;
 let engineId: string | undefined;
 let releasing: Promise<void> = Promise.resolve();
 // Model work (warmup, translation, deletion) runs one at a time. A request made
-// during a warmup waits for it instead of failing as busy. Every stage is bounded
-// (loading and inference deadlines), so the queue cannot stall.
+// during a warmup waits for it instead of failing as busy. Helper work is bounded
+// by the engine's loading and inference deadlines.
 let working = 0;
 let tail: Promise<unknown> = Promise.resolve();
 let releaseVersion = 0;
@@ -97,7 +97,7 @@ function serial<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
       emit();
     }
   };
-  const result = tail.then(run, run);
+  const result = tail.then(run);
   tail = result.catch(() => undefined);
   return result;
 }

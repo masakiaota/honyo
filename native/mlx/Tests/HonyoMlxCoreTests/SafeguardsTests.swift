@@ -27,6 +27,22 @@ final class SafeguardsTests: XCTestCase {
         XCTAssertNil(channel.next())
     }
 
+    func testWaitingReaderWakesOnPushAndClose() {
+        let channel = RequestChannel()
+        let received = expectation(description: "request and end of input")
+        nonisolated(unsafe) var lines: [String?] = []
+        Thread {
+            lines.append(channel.next())
+            lines.append(channel.next())
+            received.fulfill()
+        }.start()
+        Thread.sleep(forTimeInterval: 0.05)
+        channel.push(#"{"id":"a","op":"warmup","target":"English"}"#)
+        channel.close()
+        wait(for: [received], timeout: 2)
+        XCTAssertEqual(lines, [#"{"id":"a","op":"warmup","target":"English"}"#, nil])
+    }
+
     func testRequestContract() throws {
         func decode(_ json: String) throws -> HelperRequest {
             try JSONDecoder().decode(HelperRequest.self, from: Data(json.utf8))
