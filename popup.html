@@ -590,6 +590,8 @@
       // Show loading state
       let isStreaming = false;
       ipcRenderer.on('translation-loading', () => {
+        // A popup reused by a new request must not keep the replaced stream's state.
+        isStreaming = false;
         currentTranslation = '';
         currentLangs = null;
         document.getElementById('spinner-container').classList.add('active');

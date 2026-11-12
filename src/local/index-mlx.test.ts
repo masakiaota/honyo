@@ -14,13 +14,14 @@ const fake = vi.hoisted(() => {
     packaged: false,
     helperPresent: true,
     missing: '',
-    verify: vi.fn().mockResolvedValue(true),
     download: vi.fn().mockResolvedValue('model-dir'),
     deleted: vi.fn(),
     warm: vi.fn().mockResolvedValue(undefined),
     translate: vi.fn().mockResolvedValue({ translation: '訳文' }),
     release: vi.fn().mockResolvedValue(undefined),
     construct: vi.fn(),
+    instances: [] as { released: boolean }[],
+    translatedOnReleased: [] as boolean[],
   };
 });
 vi.mock('electron', () => ({
@@ -43,15 +44,23 @@ vi.mock('node:fs', () => ({
   },
 }));
 vi.mock('node:fs/promises', () => ({ rm: fake.deleted }));
-vi.mock('./download.ts', () => ({ verifyModel: fake.verify, downloadModel: fake.download }));
+vi.mock('./download.ts', () => ({ downloadModel: fake.download }));
 vi.mock('./mlx-engine.ts', () => ({
   MlxEngine: class {
+    released = false;
     constructor(path: string, helper: string) {
       fake.construct(path, helper);
+      fake.instances.push(this);
     }
     warmup = fake.warm;
-    release = fake.release;
-    translate = fake.translate;
+    release = (...args: unknown[]): unknown => {
+      this.released = true;
+      return fake.release(...args);
+    };
+    translate = (...args: unknown[]): unknown => {
+      fake.translatedOnReleased.push(this.released);
+      return fake.translate(...args);
+    };
   },
 }));
 const SECOND_MODEL_ID = 'local-plamo-3-8b';
@@ -70,6 +79,8 @@ beforeEach(() => {
   fake.helperPresent = true;
   fake.missing = '';
   vi.clearAllMocks();
+  fake.instances.length = 0;
+  fake.translatedOnReleased.length = 0;
 });
 afterEach(async () => {
   releaseLocal();
@@ -130,6 +141,75 @@ it('waits for explicit release before loading again instead of holding two resid
   barrier.resolve();
   await warming;
   expect(fake.construct).toHaveBeenCalledTimes(2);
+});
+
+it('waits for a startup warmup instead of rejecting a translation as busy', async () => {
+  const loading = Promise.withResolvers<void>();
+  fake.warm.mockReturnValueOnce(loading.promise);
+  const warming = warmLocal(LOCAL_MODEL_ID);
+  await vi.waitFor(() => expect(fake.warm).toHaveBeenCalledOnce());
+  const translating = translateLocal('Hello', 'Japanese', 'English');
+  await Promise.resolve();
+  expect(fake.translate).not.toHaveBeenCalled();
+  expect(localState(LOCAL_MODEL_ID).busy).toBe(true);
+  loading.resolve();
+  await expect(translating).resolves.toEqual({ translation: '訳文' });
+  await warming;
+  expect(fake.construct).toHaveBeenCalledOnce();
+  expect(localState(LOCAL_MODEL_ID).busy).toBe(false);
+});
+
+it('skips a request cancelled while queued without touching the resident engine', async () => {
+  await warmLocal(SECOND_MODEL_ID);
+  const loading = Promise.withResolvers<void>();
+  fake.warm.mockReturnValueOnce(loading.promise);
+  const warming = warmLocal(SECOND_MODEL_ID);
+  const controller = new AbortController();
+  const translating = translateLocal('Hello', 'Japanese', 'English', controller.signal);
+  controller.abort(new Error('Replaced by a newer request'));
+  loading.resolve();
+  await warming;
+  await expect(translating).rejects.toThrow('Replaced by a newer request');
+  expect(localState(LOCAL_MODEL_ID).error).toBe('');
+  // The cancelled request for another model did not release the resident one.
+  expect(fake.release).not.toHaveBeenCalled();
+  expect(fake.translate).not.toHaveBeenCalled();
+});
+
+it('does not start a helper for a request queued before the model was released', async () => {
+  const loading = Promise.withResolvers<void>();
+  fake.warm.mockReturnValueOnce(loading.promise);
+  const warming = warmLocal(LOCAL_MODEL_ID);
+  await vi.waitFor(() => expect(fake.warm).toHaveBeenCalledOnce());
+  const translating = translateLocal('Hello', 'Japanese', 'English');
+  releaseLocal();
+  loading.resolve();
+  await warming;
+  await expect(translating).rejects.toThrow('selection changed');
+  expect(fake.construct).toHaveBeenCalledOnce();
+  expect(fake.translate).not.toHaveBeenCalled();
+});
+
+it('never submits a translation to an engine that a model switch is releasing', async () => {
+  await warmLocal(SECOND_MODEL_ID);
+  const barrier = Promise.withResolvers<void>();
+  fake.release.mockReturnValueOnce(barrier.promise);
+  // The popup translates with model A while the settings test still uses model B.
+  const switching = translateLocal('Hello', 'Japanese', 'English', undefined, undefined);
+  await vi.waitFor(() => expect(fake.release).toHaveBeenCalledOnce());
+  const testing = translateLocal(
+    'Hello',
+    'Japanese',
+    'English',
+    undefined,
+    undefined,
+    SECOND_MODEL_ID,
+  );
+  barrier.resolve();
+  await Promise.all([switching, testing]);
+  expect(fake.translatedOnReleased).toEqual([false, false]);
+  // Each switch released its predecessor: exactly one engine stays resident.
+  expect(fake.instances.filter(instance => !instance.released)).toHaveLength(1);
 });
 
 it('blocks replacement engines when native shutdown cannot be confirmed', async () => {

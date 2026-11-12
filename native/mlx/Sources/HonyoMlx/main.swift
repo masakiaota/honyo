@@ -33,22 +33,43 @@ struct Helper {
             let tokenizer = try PromptTokenizer(directory: directory)
             let model = try Plamo(directory: directory)
             let decoder = FastDecoder(model: model)
-            emit(["type": "ready", "protocol": 1, "modelType": "plamo3",
+            let channel = RequestChannel()
+            let reader = Thread {
+                while let line = readLine(strippingNewline: true) { channel.push(line) }
+                channel.close()
+            }
+            reader.start()
+            emit(["type": "ready", "protocol": 2, "modelType": "plamo3",
                   "decoder": "metal",
                   "contextSize": PromptSafety.contextSize, "loadMs": Date().timeIntervalSince(started) * 1000])
-            while let line = readLine(strippingNewline: true) {
+            while let line = channel.next() {
                 let data = Data(line.utf8)
                 let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
                 let id = raw?["id"] as? String ?? ""
                 do {
                     let request = try JSONDecoder().decode(HelperRequest.self, from: data)
                     if request.op == .exit { return }
+                    if channel.isCancelled(id) {
+                        emit(["type": "cancelled", "id": id])
+                        continue
+                    }
                     let start = Date()
                     let full = try tokenizer.prompt(target: request.target, text: request.text ?? "Hello.")
-                    let maxTokens = try PromptSafety.generationBudget(inputTokens: full.count)
+                    let maxTokens: Int
+                    do {
+                        maxTokens = try PromptSafety.generationBudget(inputTokens: full.count)
+                    } catch let error as PromptTooLongError {
+                        // Nothing has touched the GPU yet; keep serving later requests.
+                        emit(["type": "error", "id": id, "code": "input-too-long", "error": error.message])
+                        continue
+                    }
                     // Only weights and compiled kernels persist. Every request owns fresh KV.
                     let cache = model.newCache()
-                    model.prefill(full.dropLast(), cache: cache)
+                    // A long prompt prefills in several GPU batches; stop between them on cancel.
+                    guard model.prefill(full.dropLast(), cache: cache, stop: { channel.isCancelled(id) }) else {
+                        emit(["type": "cancelled", "id": id])
+                        continue
+                    }
                     let promptMs = Date().timeIntervalSince(start) * 1000
                     var pending = decoder.next(MLXArray([UInt32(full.last!)]), cache: cache)
                     asyncEval(pending)
@@ -64,6 +85,7 @@ struct Helper {
                     var firstTokenMs: Double?
                     let generationStart = Date()
                     for index in 0..<maxTokens {
+                        if channel.isCancelled(id) { stopReason = "cancelled"; break }
                         // Encode the next GPU step before waiting for the preceding sample.
                         let current = pending
                         if index + 1 < maxTokens {
@@ -84,6 +106,10 @@ struct Helper {
                     }
                     // A speculative next step may still be writing KV. Drain it before freeing buffers.
                     eval(pending)
+                    if stopReason == "cancelled" {
+                        emit(["type": "cancelled", "id": id])
+                        continue
+                    }
                     guard incomplete.isEmpty else { throw HelperError("Incomplete UTF-8 output") }
                     let response = output.trimmingCharacters(in: .whitespacesAndNewlines)
                     emit(["type": "result", "id": id, "response": response, "stopReason": stopReason,
