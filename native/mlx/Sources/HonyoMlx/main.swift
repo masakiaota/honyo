@@ -65,7 +65,11 @@ struct Helper {
                     }
                     // Only weights and compiled kernels persist. Every request owns fresh KV.
                     let cache = model.newCache()
-                    model.prefill(full.dropLast(), cache: cache)
+                    // A long prompt prefills in several GPU batches; stop between them on cancel.
+                    guard model.prefill(full.dropLast(), cache: cache, stop: { channel.isCancelled(id) }) else {
+                        emit(["type": "cancelled", "id": id])
+                        continue
+                    }
                     let promptMs = Date().timeIntervalSince(start) * 1000
                     var pending = decoder.next(MLXArray([UInt32(full.last!)]), cache: cache)
                     asyncEval(pending)
