@@ -15,11 +15,11 @@ let engine: MlxEngine | undefined;
 let engineId: string | undefined;
 let releasing: Promise<void> = Promise.resolve();
 const verified = new Set<string>();
-// Install/delete own the model directory exclusively. Translations and warmups
-// share the engine, which serializes them, so they wait rather than fail.
-let deleting = false;
-let translations = 0;
-let warming: { id: string; promise: Promise<void> } | undefined;
+// Model work (warmup, translation, deletion) runs one at a time. A request made
+// during a warmup waits for it instead of failing as busy. Every stage is bounded
+// (verification, loading and inference deadlines), so the queue cannot stall.
+let working = 0;
+let tail: Promise<unknown> = Promise.resolve();
 const VERIFY_TIMEOUT_MS = 10 * 60_000;
 let releaseVersion = 0;
 const progress = new Map<string, { phase: string; bytes: number; error: string }>();
@@ -72,7 +72,7 @@ export function localState(id = LOCAL_MODEL_ID): LocalState {
     ...status(id),
     total: model.bytes,
     path: directory(),
-    busy: deleting || !!controller || translations > 0 || !!warming,
+    busy: working > 0 || !!controller,
   };
 }
 export function subscribeLocal(listener: () => void): () => void {
@@ -82,59 +82,29 @@ export function subscribeLocal(listener: () => void): () => void {
 function emit(): void {
   for (const listener of listeners) listener();
 }
-function assertSupported(): void {
+function assertAvailable(): void {
   if (!localSupported) throw new Error('Offline translation requires an Apple Silicon Mac.');
+  if (controller) throw new Error('The offline model is busy. Please wait and try again.');
 }
-function assertNotManaging(): void {
-  if (deleting || controller)
-    throw new Error('The offline model is busy. Please wait and try again.');
-}
-function assertIdle(): void {
-  assertSupported();
-  assertNotManaging();
-  if (translations > 0 || warming)
-    throw new Error('The offline model is busy. Please wait and try again.');
-}
-/** Waits for a pending warmup; an abort stops only this caller's wait. */
-function waitForWarmup(signal?: AbortSignal): Promise<void> {
-  const pending = warming?.promise;
-  if (!pending) return Promise.resolve();
-  if (!signal) return pending;
-  signal.throwIfAborted();
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = (): void =>
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new Error('Offline translation cancelled.'),
-      );
-    signal.addEventListener('abort', onAbort, { once: true });
-    void pending.then(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    });
-  });
-}
-// Selecting, releasing and submitting work to an engine happen under one lock, so a
-// request can never reach an engine that another caller is replacing (which would
-// spawn a helper nobody owns). Work is submitted, not awaited, inside the lock.
-let engineLock: Promise<unknown> = Promise.resolve();
-function withEngine<T>(
-  id: string,
-  signal: AbortSignal | undefined,
-  submit: (engine: MlxEngine) => Promise<T>,
-): Promise<T> {
-  const run = async (): Promise<{ result: Promise<T> }> => {
-    const result = submit(await getEngine(id, signal));
-    void result.catch(() => undefined);
-    return { result };
+function serial<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  ++working;
+  emit();
+  const run = async (): Promise<T> => {
+    try {
+      // A request cancelled while queued leaves no trace.
+      signal?.throwIfAborted();
+      return await task();
+    } finally {
+      --working;
+      emit();
+    }
   };
-  const locked = engineLock.then(run, run);
-  engineLock = locked.catch(() => undefined);
-  return locked.then(({ result }) => result);
+  const result = tail.then(run, run);
+  tail = result.catch(() => undefined);
+  return result;
 }
-async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
-  const version = releaseVersion;
+/** `version` is captured when the request is made, so a release while queued cancels it. */
+async function getEngine(id: string, version: number, signal?: AbortSignal): Promise<MlxEngine> {
   assertEngineAvailable();
   await releasing;
   if (engineId !== id) {
@@ -159,7 +129,8 @@ async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
 }
 export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
   const model = getLocalModel(id);
-  assertIdle();
+  assertAvailable();
+  if (working > 0) throw new Error('The offline model is busy. Please wait and try again.');
   assertEngineAvailable();
   controller = new AbortController();
   const state = status(id);
@@ -198,12 +169,10 @@ export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
 export function cancelLocalDownload(): void {
   controller?.abort();
 }
-export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
+export function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
   const state = status(id);
-  assertIdle();
-  deleting = true;
-  emit();
-  try {
+  assertAvailable();
+  return serial(async () => {
     await releasing;
     if (engineId === id) {
       await engine?.release();
@@ -214,12 +183,9 @@ export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
     // getLocalModel accepts only the fixed registry; never remove a caller-supplied path.
     await rm(modelPath(id), { recursive: true, force: true });
     Object.assign(state, { phase: 'idle', error: '', bytes: 0 });
-  } finally {
-    deleting = false;
-    emit();
-  }
+  });
 }
-export async function translateLocal(
+export function translateLocal(
   text: string,
   primary: string,
   secondary: string,
@@ -228,62 +194,45 @@ export async function translateLocal(
   id = LOCAL_MODEL_ID,
 ): Promise<LocalResult> {
   const state = status(id);
-  assertSupported();
-  assertNotManaging();
+  assertAvailable();
   if (!localState(id).installed)
     throw new Error('Download this model in Settings → Offline Translation.');
-  ++translations;
-  Object.assign(state, { phase: 'translating', error: '' });
-  emit();
-  try {
-    // A request during startup or settings warmup waits for the model instead
-    // of failing as busy. Loading and inference have their own engine deadlines.
-    await waitForWarmup(signal);
-    assertNotManaging();
-    return await withEngine(id, signal, value =>
-      value.translate(text, primary, secondary, signal, onChunk),
-    );
-  } catch (cause) {
-    if (!signal?.aborted) state.error = cause instanceof Error ? cause.message : String(cause);
-    throw cause;
-  } finally {
-    --translations;
-    if (translations === 0 && !warming) state.phase = 'ready';
+  const version = releaseVersion;
+  return serial(async () => {
+    Object.assign(state, { phase: 'translating', error: '' });
     emit();
-  }
+    try {
+      return await (
+        await getEngine(id, version, signal)
+      ).translate(text, primary, secondary, signal, onChunk);
+    } catch (cause) {
+      if (!signal?.aborted) state.error = cause instanceof Error ? cause.message : String(cause);
+      throw cause;
+    } finally {
+      state.phase = 'ready';
+      emit();
+    }
+  }, signal);
 }
 export function shutdownLocal(): void {
   cancelLocalDownload();
   releaseLocal();
 }
 export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'): Promise<void> {
-  if (!localSupported || deleting || controller || !localState(id).installed) return;
-  if (warming?.id === id) return warming.promise;
-  const previous = warming?.promise ?? Promise.resolve();
-  const promise = previous.then(() => runWarmup(id, targetLanguage));
-  const entry = { id, promise };
-  warming = entry;
-  void promise.then(() => {
-    if (warming === entry) warming = undefined;
-    emit();
-  });
-  return promise;
-}
-/** Never rejects: the failure is recorded in the model state. */
-async function runWarmup(id: string, targetLanguage: string): Promise<void> {
   const state = status(id);
-  if (deleting || controller || !localState(id).installed) return;
-  Object.assign(state, { phase: 'loading', error: '' });
-  emit();
-  try {
-    await withEngine(id, undefined, value => value.warmup(targetLanguage));
-    state.phase = 'ready';
-  } catch (cause) {
-    state.error = cause instanceof Error ? cause.message : String(cause);
-    state.phase = 'idle';
-  } finally {
+  if (!localSupported || controller || !localState(id).installed) return;
+  const version = releaseVersion;
+  return serial(async () => {
+    Object.assign(state, { phase: 'loading', error: '' });
     emit();
-  }
+    try {
+      await (await getEngine(id, version)).warmup(targetLanguage);
+      state.phase = 'ready';
+    } catch (cause) {
+      state.error = cause instanceof Error ? cause.message : String(cause);
+      state.phase = 'idle';
+    }
+  });
 }
 export function releaseLocal(): void {
   releaseVersion++;

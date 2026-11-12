@@ -29,14 +29,10 @@ interface Operation {
   protocolBytes: number;
   done: boolean;
   terminal: boolean;
-  /** Infinity until the request is written; queueing and loading have their own bounds. */
-  expiresAt: number;
   resolve: (response: string) => void;
   reject: (error: unknown) => void;
   promise: Promise<string>;
   cleanup: () => void;
-  cancel: (error: unknown) => void;
-  cancelSent: boolean;
   grace: ReturnType<typeof setTimeout> | undefined;
   /** Resolves once the helper no longer works on this operation. */
   released: PromiseWithResolvers<void>;
@@ -160,11 +156,8 @@ export class MlxEngine {
       protocolBytes: 0,
       done: false,
       terminal: false,
-      expiresAt: Infinity,
       ...deferred,
       cleanup: () => undefined,
-      cancel: () => undefined,
-      cancelSent: false,
       grace: undefined,
       released: Promise.withResolvers<void>(),
     };
@@ -178,7 +171,6 @@ export class MlxEngine {
       const helper = this.helper;
       if (helper?.pending === operation) this.requestCancel(helper, operation, error);
     };
-    operation.cancel = cancel;
     const onAbort = (): void => cancel(signal?.reason);
     signal?.addEventListener('abort', onAbort, { once: true });
     operation.cleanup = (): void => {
@@ -202,7 +194,6 @@ export class MlxEngine {
         if (operation.done) return;
         if (this.helper !== helper) throw new Error('MLX helper exited unexpectedly.');
         helper.pending = operation;
-        operation.expiresAt = performance.now() + TIMEOUT_MS;
         timer = setTimeout(() => cancel(timeoutError()), TIMEOUT_MS);
         const request = {
           id: operation.id,
@@ -230,8 +221,8 @@ export class MlxEngine {
   private active: Operation | undefined;
 
   private requestCancel(helper: Helper, operation: Operation, error: unknown): void {
-    if (operation.cancelSent || operation.terminal) return;
-    operation.cancelSent = true;
+    // Called once: cancel() returns early for a finished operation.
+    if (operation.terminal) return;
     helper.child.stdin.write(JSON.stringify({ id: operation.id, op: 'cancel' }) + '\n', failed => {
       if (failed && this.helper === helper)
         this.discard(helper, new Error('Could not write to the MLX helper.'));
@@ -382,8 +373,6 @@ export class MlxEngine {
     const operation = helper.pending;
     if (!operation || operation.terminal || frame.id !== operation.id) throw protocolError();
     if (++operation.frames > MAX_FRAMES) throw protocolError();
-    if (!operation.done && performance.now() >= operation.expiresAt)
-      operation.cancel(timeoutError());
     if (operation.done) {
       // Cancelled: drop output until the helper reports that it stopped.
       if (frame.type === 'chunk') return;

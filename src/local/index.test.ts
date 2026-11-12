@@ -62,9 +62,11 @@ it('releases the old model before loading another, verifies each and only delete
   await vi.waitFor(() => expect(fake.events).toHaveLength(2));
   expect(fake.events[1]).toContain('release:');
   expect(localState(SECOND_MODEL_ID).busy).toBe(true);
-  await expect(deleteLocal(LOCAL_MODEL_ID)).rejects.toThrow('busy');
+  // Deletion waits for the running model work instead of failing as busy.
+  const deleting = deleteLocal(LOCAL_MODEL_ID);
   pending.resolve();
   await switching;
+  await deleting;
   expect(fake.targets).toEqual(['Japanese', 'English']);
   expect(fake.events[2]).toContain('load:/test-data/models/plamo-3-translate-8b-');
   expect(fake.verify).toHaveBeenLastCalledWith(

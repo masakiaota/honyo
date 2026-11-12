@@ -160,40 +160,35 @@ it('waits for a startup warmup instead of rejecting a translation as busy', asyn
   expect(localState(LOCAL_MODEL_ID).busy).toBe(false);
 });
 
-it('lets a cancelled caller stop waiting for warmup without failing the warmup', async () => {
+it('skips a request cancelled while queued without touching the resident engine', async () => {
+  await warmLocal(SECOND_MODEL_ID);
+  const loading = Promise.withResolvers<void>();
+  fake.warm.mockReturnValueOnce(loading.promise);
+  const warming = warmLocal(SECOND_MODEL_ID);
+  const controller = new AbortController();
+  const translating = translateLocal('Hello', 'Japanese', 'English', controller.signal);
+  controller.abort(new Error('Replaced by a newer request'));
+  loading.resolve();
+  await warming;
+  await expect(translating).rejects.toThrow('Replaced by a newer request');
+  expect(localState(LOCAL_MODEL_ID).error).toBe('');
+  // The cancelled request for another model did not release the resident one.
+  expect(fake.release).not.toHaveBeenCalled();
+  expect(fake.translate).not.toHaveBeenCalled();
+});
+
+it('does not start a helper for a request queued before the model was released', async () => {
   const loading = Promise.withResolvers<void>();
   fake.warm.mockReturnValueOnce(loading.promise);
   const warming = warmLocal(LOCAL_MODEL_ID);
   await vi.waitFor(() => expect(fake.warm).toHaveBeenCalledOnce());
-  const controller = new AbortController();
-  const translating = translateLocal('Hello', 'Japanese', 'English', controller.signal);
-  controller.abort(new Error('Replaced by a newer request'));
-  await expect(translating).rejects.toThrow('Replaced by a newer request');
-  expect(localState(LOCAL_MODEL_ID).error).toBe('');
+  const translating = translateLocal('Hello', 'Japanese', 'English');
+  releaseLocal();
   loading.resolve();
   await warming;
-  expect(localState(LOCAL_MODEL_ID).phase).toBe('ready');
+  await expect(translating).rejects.toThrow('selection changed');
+  expect(fake.construct).toHaveBeenCalledOnce();
   expect(fake.translate).not.toHaveBeenCalled();
-});
-
-it('reuses the pending warmup of the same model instead of starting another', async () => {
-  const loading = Promise.withResolvers<void>();
-  fake.warm.mockReturnValueOnce(loading.promise);
-  const first = warmLocal(LOCAL_MODEL_ID);
-  const second = warmLocal(LOCAL_MODEL_ID);
-  loading.resolve();
-  await Promise.all([first, second]);
-  expect(fake.warm).toHaveBeenCalledOnce();
-});
-
-it('still rejects deletion while a translation is running', async () => {
-  const running = Promise.withResolvers<{ translation: string }>();
-  fake.translate.mockReturnValueOnce(running.promise);
-  const translating = translateLocal('Hello', 'Japanese', 'English');
-  await vi.waitFor(() => expect(fake.translate).toHaveBeenCalledOnce());
-  await expect(deleteLocal(LOCAL_MODEL_ID)).rejects.toThrow('busy');
-  running.resolve({ translation: '訳文' });
-  await translating;
 });
 
 it('never submits a translation to an engine that a model switch is releasing', async () => {

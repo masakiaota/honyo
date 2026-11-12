@@ -46,7 +46,8 @@ vi.mock('../translation/index.ts', () => ({
   translateTextDetailed: fake.detailed,
 }));
 vi.mock('../config/index.ts', () => ({
-  getConfig: (): Record<string, unknown> => fake.config,
+  // updateConfig replaces the object, so a captured config never changes.
+  getConfig: (): Record<string, unknown> => ({ ...fake.config }),
   getPausedState: (): boolean => false,
 }));
 vi.mock('../ui/tray.ts', () => ({ setTrayIcon: vi.fn() }));
