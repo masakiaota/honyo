@@ -21,6 +21,8 @@ const fake = vi.hoisted(() => {
     translate: vi.fn().mockResolvedValue({ translation: '訳文' }),
     release: vi.fn().mockResolvedValue(undefined),
     construct: vi.fn(),
+    instances: [] as { released: boolean }[],
+    translatedOnReleased: [] as boolean[],
   };
 });
 vi.mock('electron', () => ({
@@ -46,12 +48,20 @@ vi.mock('node:fs/promises', () => ({ rm: fake.deleted }));
 vi.mock('./download.ts', () => ({ verifyModel: fake.verify, downloadModel: fake.download }));
 vi.mock('./mlx-engine.ts', () => ({
   MlxEngine: class {
+    released = false;
     constructor(path: string, helper: string) {
       fake.construct(path, helper);
+      fake.instances.push(this);
     }
     warmup = fake.warm;
-    release = fake.release;
-    translate = fake.translate;
+    release = (...args: unknown[]): unknown => {
+      this.released = true;
+      return fake.release(...args);
+    };
+    translate = (...args: unknown[]): unknown => {
+      fake.translatedOnReleased.push(this.released);
+      return fake.translate(...args);
+    };
   },
 }));
 const SECOND_MODEL_ID = 'local-plamo-3-8b';
@@ -70,6 +80,8 @@ beforeEach(() => {
   fake.helperPresent = true;
   fake.missing = '';
   vi.clearAllMocks();
+  fake.instances.length = 0;
+  fake.translatedOnReleased.length = 0;
 });
 afterEach(async () => {
   releaseLocal();
@@ -182,6 +194,28 @@ it('still rejects deletion while a translation is running', async () => {
   await expect(deleteLocal(LOCAL_MODEL_ID)).rejects.toThrow('busy');
   running.resolve({ translation: '訳文' });
   await translating;
+});
+
+it('never submits a translation to an engine that a model switch is releasing', async () => {
+  await warmLocal(SECOND_MODEL_ID);
+  const barrier = Promise.withResolvers<void>();
+  fake.release.mockReturnValueOnce(barrier.promise);
+  // The popup translates with model A while the settings test still uses model B.
+  const switching = translateLocal('Hello', 'Japanese', 'English', undefined, undefined);
+  await vi.waitFor(() => expect(fake.release).toHaveBeenCalledOnce());
+  const testing = translateLocal(
+    'Hello',
+    'Japanese',
+    'English',
+    undefined,
+    undefined,
+    SECOND_MODEL_ID,
+  );
+  barrier.resolve();
+  await Promise.all([switching, testing]);
+  expect(fake.translatedOnReleased).toEqual([false, false]);
+  // Each switch released its predecessor: exactly one engine stays resident.
+  expect(fake.instances.filter(instance => !instance.released)).toHaveLength(1);
 });
 
 it('blocks replacement engines when native shutdown cannot be confirmed', async () => {

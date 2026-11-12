@@ -152,3 +152,31 @@ it('ignores whitespace-only clipboard text without opening a popup', async () =>
   expect(fake.show).not.toHaveBeenCalled();
   expect(fake.stream).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['whitespace-only', ' \n'],
+  ['over-limit', 'x'.repeat(4097)],
+])('keeps the running translation when a new %s copy cannot start', async (_name, clipboard) => {
+  const first = Promise.withResolvers<string>();
+  fake.stream.mockImplementationOnce(() => first.promise);
+  doubleCopy();
+  await vi.advanceTimersByTimeAsync(60);
+  const signal = fake.stream.mock.lastCall?.[4] as AbortSignal;
+  vi.setSystemTime(20_000);
+  fake.clipboard = clipboard;
+  doubleCopy();
+  await vi.advanceTimersByTimeAsync(60);
+  expect(signal.aborted).toBe(false);
+  first.resolve('こんにちは');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fake.finalize).toHaveBeenCalledExactlyOnceWith('こんにちは');
+});
+
+it('does not start a double copy that was pending when the popup closed', async () => {
+  fake.stream.mockResolvedValue('訳');
+  doubleCopy();
+  cancelCurrentTranslation();
+  await vi.advanceTimersByTimeAsync(60);
+  expect(fake.show).not.toHaveBeenCalled();
+  expect(fake.stream).not.toHaveBeenCalled();
+});

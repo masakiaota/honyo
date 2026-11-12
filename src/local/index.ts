@@ -115,6 +115,24 @@ function waitForWarmup(signal?: AbortSignal): Promise<void> {
     });
   });
 }
+// Selecting, releasing and submitting work to an engine happen under one lock, so a
+// request can never reach an engine that another caller is replacing (which would
+// spawn a helper nobody owns). Work is submitted, not awaited, inside the lock.
+let engineLock: Promise<unknown> = Promise.resolve();
+function withEngine<T>(
+  id: string,
+  signal: AbortSignal | undefined,
+  submit: (engine: MlxEngine) => Promise<T>,
+): Promise<T> {
+  const run = async (): Promise<{ result: Promise<T> }> => {
+    const result = submit(await getEngine(id, signal));
+    void result.catch(() => undefined);
+    return { result };
+  };
+  const locked = engineLock.then(run, run);
+  engineLock = locked.catch(() => undefined);
+  return locked.then(({ result }) => result);
+}
 async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
   const version = releaseVersion;
   assertEngineAvailable();
@@ -222,7 +240,9 @@ export async function translateLocal(
     // of failing as busy. Loading and inference have their own engine deadlines.
     await waitForWarmup(signal);
     assertNotManaging();
-    return await (await getEngine(id, signal)).translate(text, primary, secondary, signal, onChunk);
+    return await withEngine(id, signal, value =>
+      value.translate(text, primary, secondary, signal, onChunk),
+    );
   } catch (cause) {
     if (!signal?.aborted) state.error = cause instanceof Error ? cause.message : String(cause);
     throw cause;
@@ -256,7 +276,7 @@ async function runWarmup(id: string, targetLanguage: string): Promise<void> {
   Object.assign(state, { phase: 'loading', error: '' });
   emit();
   try {
-    await (await getEngine(id)).warmup(targetLanguage);
+    await withEngine(id, undefined, value => value.warmup(targetLanguage));
     state.phase = 'ready';
   } catch (cause) {
     state.error = cause instanceof Error ? cause.message : String(cause);

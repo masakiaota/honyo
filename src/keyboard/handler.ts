@@ -19,9 +19,11 @@ let isTranslating = false;
 let t = 0;
 let n = 0;
 let currentAbortController: AbortController | null = null;
-// Every double copy gets an id. Only the latest request may start or touch the
-// popup; a cancelled request cleans up its own state and nothing else.
-let latestRequestId = 0;
+// Every double copy gets a start id; only the latest one may start. A request
+// replaces the running translation only once its input is valid. Only the
+// active request may touch the popup; a replaced one cleans up its own state.
+let latestStartId = 0;
+let activeRequestId = 0;
 let pendingStart: ReturnType<typeof setTimeout> | undefined;
 
 export function setupKeyboardHandler(): void {
@@ -44,23 +46,17 @@ export function setupKeyboardHandler(): void {
         return;
       }
 
-      // Cancel current translation if in progress
-      if (isTranslating) {
-        console.log('Translation already in progress, cancelling and starting new one...');
-        cancelCurrentTranslation();
-        // Don't return - continue with new translation
-      }
-
-      const requestId = ++latestRequestId;
+      const startId = ++latestStartId;
       clearTimeout(pendingStart);
       pendingStart = setTimeout(() => {
         pendingStart = undefined;
-        if (requestId !== latestRequestId) return;
+        if (startId !== latestStartId) return;
         void (async (): Promise<void> => {
           // Create new AbortController for this translation
           const abortController = new AbortController();
+          let requestId = 0;
           const isCurrent = (): boolean =>
-            requestId === latestRequestId && currentAbortController === abortController;
+            requestId === activeRequestId && currentAbortController === abortController;
           // The display mode is fixed per request so that a mode change cannot
           // skip finishing a popup this request already opened.
           const config = getConfig();
@@ -71,7 +67,8 @@ export function setupKeyboardHandler(): void {
             const text = await clipboard.readText();
             console.log('Clipboard content:', text ? text.slice(0, 50) + '...' : '(empty)');
 
-            if (requestId !== latestRequestId || !text.trim()) {
+            // Superseded or closed while reading; an empty copy keeps the current translation.
+            if (startId !== latestStartId || !text.trim()) {
               return; // Do nothing
             }
 
@@ -83,6 +80,13 @@ export function setupKeyboardHandler(): void {
               }).show();
               return;
             }
+
+            // Replace the current translation only now that this request will start.
+            if (isTranslating) {
+              console.log('Translation already in progress, cancelling and starting new one...');
+              abortActiveTranslation();
+            }
+            requestId = ++activeRequestId;
 
             // Start translation
             isTranslating = true;
@@ -206,7 +210,15 @@ export function stopKeyboardListener(): void {
   }
 }
 
+/** Cancels the running translation and any double copy that has not started yet. */
 export function cancelCurrentTranslation(): void {
+  clearTimeout(pendingStart);
+  pendingStart = undefined;
+  ++latestStartId;
+  abortActiveTranslation();
+}
+
+function abortActiveTranslation(): void {
   if (currentAbortController) {
     currentAbortController.abort();
     console.log('Translation cancelled');
