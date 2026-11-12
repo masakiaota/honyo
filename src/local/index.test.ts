@@ -69,7 +69,7 @@ it('releases the old model before loading another, verifies each and only delete
   expect(fake.events[2]).toContain('load:/test-data/models/plamo-3-translate-8b-');
   expect(fake.verify).toHaveBeenLastCalledWith(
     expect.stringContaining('8b'),
-    undefined,
+    expect.any(AbortSignal),
     getLocalModel(SECOND_MODEL_ID),
   );
   expect(localState(LOCAL_MODEL_ID).total).toBe(getLocalModel(LOCAL_MODEL_ID).bytes);

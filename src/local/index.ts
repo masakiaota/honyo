@@ -15,7 +15,12 @@ let engine: MlxEngine | undefined;
 let engineId: string | undefined;
 let releasing: Promise<void> = Promise.resolve();
 const verified = new Set<string>();
-let working = false;
+// Install/delete own the model directory exclusively. Translations and warmups
+// share the engine, which serializes them, so they wait rather than fail.
+let deleting = false;
+let translations = 0;
+let warming: { id: string; promise: Promise<void> } | undefined;
+const VERIFY_TIMEOUT_MS = 10 * 60_000;
 let releaseVersion = 0;
 const progress = new Map<string, { phase: string; bytes: number; error: string }>();
 const listeners = new Set<() => void>();
@@ -67,7 +72,7 @@ export function localState(id = LOCAL_MODEL_ID): LocalState {
     ...status(id),
     total: model.bytes,
     path: directory(),
-    busy: working || !!controller,
+    busy: deleting || !!controller || translations > 0 || !!warming,
   };
 }
 export function subscribeLocal(listener: () => void): () => void {
@@ -77,10 +82,38 @@ export function subscribeLocal(listener: () => void): () => void {
 function emit(): void {
   for (const listener of listeners) listener();
 }
-function assertAvailable(): void {
+function assertSupported(): void {
   if (!localSupported) throw new Error('Offline translation requires an Apple Silicon Mac.');
-  if (working || controller)
+}
+function assertNotManaging(): void {
+  if (deleting || controller)
     throw new Error('The offline model is busy. Please wait and try again.');
+}
+function assertIdle(): void {
+  assertSupported();
+  assertNotManaging();
+  if (translations > 0 || warming)
+    throw new Error('The offline model is busy. Please wait and try again.');
+}
+/** Waits for a pending warmup; an abort stops only this caller's wait. */
+function waitForWarmup(signal?: AbortSignal): Promise<void> {
+  const pending = warming?.promise;
+  if (!pending) return Promise.resolve();
+  if (!signal) return pending;
+  signal.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = (): void =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error('Offline translation cancelled.'),
+      );
+    signal.addEventListener('abort', onAbort, { once: true });
+    void pending.then(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    });
+  });
 }
 async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
   const version = releaseVersion;
@@ -92,7 +125,11 @@ async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
     engineId = undefined;
   }
   if (!verified.has(id)) {
-    if (!(await verifyModel(modelPath(id), signal, getLocalModel(id))))
+    const bounded = AbortSignal.any([
+      ...(signal ? [signal] : []),
+      AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    ]);
+    if (!(await verifyModel(modelPath(id), bounded, getLocalModel(id))))
       throw new Error('The model is corrupted. Delete it and download it again.');
     verified.add(id);
   }
@@ -104,7 +141,7 @@ async function getEngine(id: string, signal?: AbortSignal): Promise<MlxEngine> {
 }
 export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
   const model = getLocalModel(id);
-  assertAvailable();
+  assertIdle();
   assertEngineAvailable();
   controller = new AbortController();
   const state = status(id);
@@ -145,8 +182,8 @@ export function cancelLocalDownload(): void {
 }
 export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
   const state = status(id);
-  assertAvailable();
-  working = true;
+  assertIdle();
+  deleting = true;
   emit();
   try {
     await releasing;
@@ -160,7 +197,7 @@ export async function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
     await rm(modelPath(id), { recursive: true, force: true });
     Object.assign(state, { phase: 'idle', error: '', bytes: 0 });
   } finally {
-    working = false;
+    deleting = false;
     emit();
   }
 }
@@ -173,23 +210,25 @@ export async function translateLocal(
   id = LOCAL_MODEL_ID,
 ): Promise<LocalResult> {
   const state = status(id);
-  assertAvailable();
+  assertSupported();
+  assertNotManaging();
   if (!localState(id).installed)
     throw new Error('Download this model in Settings → Offline Translation.');
-  working = true;
+  ++translations;
   Object.assign(state, { phase: 'translating', error: '' });
   emit();
   try {
-    const bounded = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(90_000)]);
-    return await (
-      await getEngine(id, bounded)
-    ).translate(text, primary, secondary, bounded, onChunk);
+    // A request during startup or settings warmup waits for the model instead
+    // of failing as busy. Loading and inference have their own engine deadlines.
+    await waitForWarmup(signal);
+    assertNotManaging();
+    return await (await getEngine(id, signal)).translate(text, primary, secondary, signal, onChunk);
   } catch (cause) {
-    state.error = cause instanceof Error ? cause.message : String(cause);
+    if (!signal?.aborted) state.error = cause instanceof Error ? cause.message : String(cause);
     throw cause;
   } finally {
-    working = false;
-    state.phase = 'ready';
+    --translations;
+    if (translations === 0 && !warming) state.phase = 'ready';
     emit();
   }
 }
@@ -198,9 +237,22 @@ export function shutdownLocal(): void {
   releaseLocal();
 }
 export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'): Promise<void> {
+  if (!localSupported || deleting || controller || !localState(id).installed) return;
+  if (warming?.id === id) return warming.promise;
+  const previous = warming?.promise ?? Promise.resolve();
+  const promise = previous.then(() => runWarmup(id, targetLanguage));
+  const entry = { id, promise };
+  warming = entry;
+  void promise.then(() => {
+    if (warming === entry) warming = undefined;
+    emit();
+  });
+  return promise;
+}
+/** Never rejects: the failure is recorded in the model state. */
+async function runWarmup(id: string, targetLanguage: string): Promise<void> {
   const state = status(id);
-  if (!localSupported || !localState(id).installed || working || controller) return;
-  working = true;
+  if (deleting || controller || !localState(id).installed) return;
   Object.assign(state, { phase: 'loading', error: '' });
   emit();
   try {
@@ -210,7 +262,6 @@ export async function warmLocal(id = LOCAL_MODEL_ID, targetLanguage = 'Japanese'
     state.error = cause instanceof Error ? cause.message : String(cause);
     state.phase = 'idle';
   } finally {
-    working = false;
     emit();
   }
 }
