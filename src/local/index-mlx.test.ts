@@ -14,7 +14,6 @@ const fake = vi.hoisted(() => {
     packaged: false,
     helperPresent: true,
     missing: '',
-    verify: vi.fn().mockResolvedValue(true),
     download: vi.fn().mockResolvedValue('model-dir'),
     deleted: vi.fn(),
     warm: vi.fn().mockResolvedValue(undefined),
@@ -45,7 +44,7 @@ vi.mock('node:fs', () => ({
   },
 }));
 vi.mock('node:fs/promises', () => ({ rm: fake.deleted }));
-vi.mock('./download.ts', () => ({ verifyModel: fake.verify, downloadModel: fake.download }));
+vi.mock('./download.ts', () => ({ downloadModel: fake.download }));
 vi.mock('./mlx-engine.ts', () => ({
   MlxEngine: class {
     released = false;

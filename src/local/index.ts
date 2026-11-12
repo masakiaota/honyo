@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { getLocalModel, LOCAL_MODEL_ID } from './model.ts';
-import { downloadModel, verifyModel } from './download.ts';
+import { downloadModel } from './download.ts';
 import { MlxEngine } from './mlx-engine.ts';
 
 export const localSupported = process.platform === 'darwin' && process.arch === 'arm64';
@@ -14,13 +14,11 @@ let controller: AbortController | undefined;
 let engine: MlxEngine | undefined;
 let engineId: string | undefined;
 let releasing: Promise<void> = Promise.resolve();
-const verified = new Set<string>();
 // Model work (warmup, translation, deletion) runs one at a time. A request made
 // during a warmup waits for it instead of failing as busy. Every stage is bounded
-// (verification, loading and inference deadlines), so the queue cannot stall.
+// (loading and inference deadlines), so the queue cannot stall.
 let working = 0;
 let tail: Promise<unknown> = Promise.resolve();
-const VERIFY_TIMEOUT_MS = 10 * 60_000;
 let releaseVersion = 0;
 const progress = new Map<string, { phase: string; bytes: number; error: string }>();
 const listeners = new Set<() => void>();
@@ -112,15 +110,6 @@ async function getEngine(id: string, version: number, signal?: AbortSignal): Pro
     engine = undefined;
     engineId = undefined;
   }
-  if (!verified.has(id)) {
-    const bounded = AbortSignal.any([
-      ...(signal ? [signal] : []),
-      AbortSignal.timeout(VERIFY_TIMEOUT_MS),
-    ]);
-    if (!(await verifyModel(modelPath(id), bounded, getLocalModel(id))))
-      throw new Error('The model is corrupted. Delete it and download it again.');
-    verified.add(id);
-  }
   if (version !== releaseVersion) throw new Error('Offline model selection changed.');
   signal?.throwIfAborted();
   engine ??= new MlxEngine(modelPath(id), mlxHelperPath());
@@ -151,7 +140,6 @@ export async function installLocal(id = LOCAL_MODEL_ID): Promise<void> {
       },
       model,
     );
-    verified.add(id);
     state.phase = 'ready';
   } catch (cause) {
     state.phase = 'idle';
@@ -179,7 +167,6 @@ export function deleteLocal(id = LOCAL_MODEL_ID): Promise<void> {
       engine = undefined;
       engineId = undefined;
     }
-    verified.delete(id);
     // getLocalModel accepts only the fixed registry; never remove a caller-supplied path.
     await rm(modelPath(id), { recursive: true, force: true });
     Object.assign(state, { phase: 'idle', error: '', bytes: 0 });

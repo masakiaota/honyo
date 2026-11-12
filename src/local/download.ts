@@ -16,7 +16,7 @@ async function verifyFile(
     signal?.throwIfAborted();
     if ((await stat(path)).size !== model.bytes) return false;
     const hash = createHash('sha256');
-    for await (const chunk of createReadStream(path, signal ? { signal } : {})) {
+    for await (const chunk of createReadStream(path)) {
       signal?.throwIfAborted();
       hash.update(chunk as Buffer);
     }

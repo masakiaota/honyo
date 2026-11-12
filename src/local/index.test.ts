@@ -12,7 +12,6 @@ const fake = vi.hoisted(() => {
     descriptors,
     events: [] as string[],
     targets: [] as string[],
-    verify: vi.fn().mockResolvedValue(true),
     deleted: vi.fn(),
     pending: undefined as Promise<void> | undefined,
   };
@@ -30,7 +29,7 @@ vi.mock('node:fs', () => ({
   }),
 }));
 vi.mock('node:fs/promises', () => ({ rm: fake.deleted }));
-vi.mock('./download.ts', () => ({ verifyModel: fake.verify, downloadModel: vi.fn() }));
+vi.mock('./download.ts', () => ({ downloadModel: vi.fn() }));
 vi.mock('./mlx-engine.ts', () => ({
   MlxEngine: class {
     constructor(private path: string) {}
@@ -54,7 +53,7 @@ import { LOCAL_MODEL_ID, getLocalModel, LOCAL_MODELS } from './model.ts';
 const SECOND_MODEL_ID = 'local-plamo-3-8b';
 Object.defineProperties(process, fake.descriptors);
 
-it('releases the old model before loading another, verifies each and only deletes the requested file', async () => {
+it('releases the old model before loading another and only deletes the requested file', async () => {
   await warmLocal(LOCAL_MODEL_ID);
   const pending = Promise.withResolvers<void>();
   fake.pending = pending.promise;
@@ -69,11 +68,6 @@ it('releases the old model before loading another, verifies each and only delete
   await deleting;
   expect(fake.targets).toEqual(['Japanese', 'English']);
   expect(fake.events[2]).toContain('load:/test-data/models/plamo-3-translate-8b-');
-  expect(fake.verify).toHaveBeenLastCalledWith(
-    expect.stringContaining('8b'),
-    expect.any(AbortSignal),
-    getLocalModel(SECOND_MODEL_ID),
-  );
   expect(localState(LOCAL_MODEL_ID).total).toBe(getLocalModel(LOCAL_MODEL_ID).bytes);
   expect(localState(SECOND_MODEL_ID).total).toBe(getLocalModel(SECOND_MODEL_ID).bytes);
   const before = fake.events.length;
@@ -88,13 +82,10 @@ it('releases the old model before loading another, verifies each and only delete
   );
   await deleteLocal(SECOND_MODEL_ID);
   expect(fake.events.at(-1)).toContain('release:/test-data/models/plamo-3-translate-8b-');
-  const verification = Promise.withResolvers<boolean>();
-  fake.verify.mockReturnValueOnce(verification.promise);
   const beforeCancel = fake.events.length;
+  // A warmup queued before a release must not load the released selection.
   const warming = warmLocal(LOCAL_MODEL_ID);
-  await vi.waitFor(() => expect(fake.verify).toHaveBeenCalledTimes(3));
   releaseLocal();
-  verification.resolve(true);
   await warming;
   expect(fake.events).toHaveLength(beforeCancel);
   expect(localState(LOCAL_MODEL_ID).phase).toBe('idle');
