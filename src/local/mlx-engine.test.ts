@@ -9,14 +9,14 @@ import type { LocalResult } from './model.ts';
 
 interface Request {
   id: string;
-  op: 'warmup' | 'translate';
+  op: 'warmup' | 'translate' | 'cancel';
   target: string;
   text?: string;
 }
 
 const READY = {
   type: 'ready',
-  protocol: 1,
+  protocol: 2,
   modelType: 'plamo3',
   decoder: 'metal',
   contextSize: 4096,
@@ -27,6 +27,9 @@ class Helper extends EventEmitter {
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   readonly requests: Request[] = [];
+  readonly cancels: string[] = [];
+  /** Acknowledge cancel frames like the native helper; false simulates a stuck GPU. */
+  acknowledgesCancel = true;
   respond: ((request: Request) => void) | undefined;
   writeError: Error | undefined;
   readonly stdin = new Writable({
@@ -36,6 +39,13 @@ class Helper extends EventEmitter {
         return;
       }
       const request = JSON.parse(data.toString()) as Request;
+      if (request.op === 'cancel') {
+        this.cancels.push(request.id);
+        if (this.acknowledgesCancel)
+          queueMicrotask(() => this.frame({ type: 'cancelled', id: request.id }));
+        callback();
+        return;
+      }
       this.requests.push(request);
       this.respond?.(request);
       callback();
@@ -202,26 +212,81 @@ it('parses split UTF-8 and batched JSONL frames', async () => {
   expect(chunks).toHaveBeenCalledWith('こんにちは');
 });
 
-it('cancels active generation promptly, drops stale events, and restarts only on the next call', async () => {
+it('cancels active generation promptly, drops stale events, and keeps the loaded model', async () => {
   const value = engine();
   const controller = new AbortController();
   const chunks = vi.fn();
   const { promise, helper, request } = await started(value, controller.signal, chunks);
   const rejected = expect(promise).rejects.toThrow('Cancelled');
+  helper.acknowledgesCancel = false;
   helper.frame({ type: 'chunk', id: request.id, text: 'こん' });
   controller.abort(new Error('Cancelled'));
-  expect(helper.kill).toHaveBeenCalledWith('SIGTERM');
-  helper.frame({ type: 'chunk', id: request.id, text: 'late' });
-  helper.result(request);
   await rejected;
+  expect(helper.cancels).toEqual([request.id]);
+  expect(helper.kill).not.toHaveBeenCalled();
+  const nextPromise = value.translate('Hello', 'Japanese', 'English');
+  helper.frame({ type: 'chunk', id: request.id, text: 'late' });
+  await tick();
+  // The next request waits until the helper confirms that it stopped.
+  expect(helper.requests).toHaveLength(1);
+  helper.frame({ type: 'cancelled', id: request.id });
+  await tick();
   expect(chunks.mock.calls).toEqual([['こん']]);
+  const next = helper.request(1);
+  helper.result(next);
+  await expect(nextPromise).resolves.toHaveProperty('translation', 'こんにちは');
   expect(fake.spawn).toHaveBeenCalledOnce();
+});
+
+it('accepts a result that races a cancel frame and reuses the helper', async () => {
+  const value = engine();
+  const controller = new AbortController();
+  const current = await started(value, controller.signal);
+  current.helper.acknowledgesCancel = false;
+  const rejected = expect(current.promise).rejects.toThrow('Cancelled');
+  controller.abort(new Error('Cancelled'));
+  current.helper.result(current.request);
+  await rejected;
   const next = await started(value);
-  helper.emit('error', new Error('old child error'));
-  helper.emit('exit', 1);
   next.helper.result(next.request);
-  await expect(next.promise).resolves.toHaveProperty('translation', 'こんにちは');
+  await next.promise;
+  expect(fake.spawn).toHaveBeenCalledOnce();
+});
+
+it('replaces a helper that does not acknowledge a cancel frame', async () => {
+  const value = engine();
+  const controller = new AbortController();
+  const current = await started(value, controller.signal);
+  current.helper.acknowledgesCancel = false;
+  const rejected = expect(current.promise).rejects.toThrow('Cancelled');
+  controller.abort(new Error('Cancelled'));
+  await rejected;
+  await vi.advanceTimersByTimeAsync(4_999);
+  expect(current.helper.kill).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(current.helper.kill).toHaveBeenCalledWith('SIGTERM');
+  const next = await started(value);
+  next.helper.result(next.request);
+  await next.promise;
   expect(fake.spawn).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the helper after a recoverable input-too-long rejection', async () => {
+  const value = engine();
+  const current = await started(value);
+  const rejected = expect(current.promise).rejects.toThrow('too long for the offline model');
+  current.helper.frame({
+    type: 'error',
+    id: current.request.id,
+    code: 'input-too-long',
+    error: 'Prompt exceeds fixed 4096-token context',
+  });
+  await rejected;
+  expect(current.helper.kill).not.toHaveBeenCalled();
+  const next = await started(value);
+  next.helper.result(next.request);
+  await next.promise;
+  expect(fake.spawn).toHaveBeenCalledOnce();
 });
 
 it('does not spawn for pre-aborted, invalid input, direction, or warmup targets', async () => {
@@ -286,27 +351,49 @@ it('release invalidates startup before ready and prevents queued warmup from spa
   expect(fake.spawn).toHaveBeenCalledOnce();
 });
 
-it.each(['startup', 'generation', 'warmup'])(
-  'uses one 90-second timeout for %s including loading',
+it('bounds model loading separately from inference', async () => {
+  const helper = new Helper();
+  fake.spawn.mockReturnValueOnce(helper);
+  const value = engine();
+  const pending = value.translate('Hello', 'Japanese', 'English');
+  const rejected = expect(pending).rejects.toThrow('Loading the offline model timed out');
+  await tick();
+  await vi.advanceTimersByTimeAsync(5 * 60_000 - 1);
+  expect(helper.kill).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await rejected;
+  expect(helper.kill).toHaveBeenCalledWith('SIGTERM');
+  const next = await started(value);
+  next.helper.result(next.request);
+  await next.promise;
+});
+
+it.each(['generation', 'warmup'])(
+  'starts the 90-second %s deadline after loading and keeps the model on timeout',
   async phase => {
     const helper = new Helper();
     fake.spawn.mockReturnValueOnce(helper);
     const value = engine();
     const pending =
       phase === 'warmup' ? value.warmup() : value.translate('Hello', 'Japanese', 'English');
-    const rejected = expect(pending).rejects.toThrow('timed out');
+    const rejected = expect(pending).rejects.toThrow('timed out after 90 seconds');
     await tick();
-    await vi.advanceTimersByTimeAsync(60_000);
-    if (phase !== 'startup') helper.frame(READY);
+    // A slow load does not consume the inference deadline.
+    await vi.advanceTimersByTimeAsync(120_000);
+    helper.frame(READY);
     await tick();
-    await vi.advanceTimersByTimeAsync(29_999);
-    expect(helper.kill).not.toHaveBeenCalled();
+    expect(helper.requests).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(89_999);
+    expect(helper.cancels).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
     await rejected;
-    expect(helper.kill).toHaveBeenCalledWith('SIGTERM');
-    const next = await started(value);
-    next.helper.result(next.request);
-    await next.promise;
+    expect(helper.cancels).toEqual([helper.request().id]);
+    expect(helper.kill).not.toHaveBeenCalled();
+    const next = value.translate('Hello', 'Japanese', 'English');
+    await tick();
+    helper.result(helper.request(1));
+    await next;
+    expect(fake.spawn).toHaveBeenCalledOnce();
   },
 );
 
@@ -315,11 +402,13 @@ it('escalates shutdown and blocks replacement until the old process exits', asyn
   const controller = new AbortController();
   const current = await started(value, controller.signal);
   current.helper.ignoresTerm = true;
+  current.helper.acknowledgesCancel = false;
   const rejected = expect(current.promise).rejects.toThrow();
   controller.abort();
   await rejected;
   const nextPromise = value.translate('Next', 'Japanese', 'English');
-  await tick();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(current.helper.kill.mock.calls).toEqual([['SIGTERM']]);
   expect(fake.spawn).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(1000);
   expect(current.helper.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']]);
@@ -404,8 +493,8 @@ it('rejects stdin EPIPE callbacks and emitted errors without leaking source text
 
 it.each([
   {},
-  { ...READY, protocol: 2 },
-  { ...READY, protocol: '1' },
+  { ...READY, protocol: 1 },
+  { ...READY, protocol: '2' },
   { ...READY, modelType: 'llama' },
   { ...READY, decoder: 'generic' },
   { ...READY, contextSize: 32768 },
@@ -494,20 +583,18 @@ it.each([
   [{ response: 'Hello' }, 'echoed'],
   [{ echoedSource: true }, 'echoed'],
   [{ response: 'abcdefghijklmnop'.repeat(5) }, 'valid translation'],
-])(
-  'rejects invalid generated output %j and discards all process state',
-  async (overrides, message) => {
-    const value = engine();
-    const current = await started(value);
-    const rejected = expect(current.promise).rejects.toThrow(message);
-    current.helper.result(current.request, overrides);
-    await rejected;
-    expect(current.helper.kill).toHaveBeenCalledWith('SIGTERM');
-    const next = await started(value);
-    next.helper.result(next.request);
-    await next.promise;
-  },
-);
+])('rejects invalid generated output %j and keeps the loaded model', async (overrides, message) => {
+  const value = engine();
+  const current = await started(value);
+  const rejected = expect(current.promise).rejects.toThrow(message);
+  current.helper.result(current.request, overrides);
+  await rejected;
+  expect(current.helper.kill).not.toHaveBeenCalled();
+  const next = await started(value);
+  next.helper.result(next.request);
+  await next.promise;
+  expect(fake.spawn).toHaveBeenCalledOnce();
+});
 
 it('runs output preservation validators for code and URLs', async () => {
   const value = engine();
@@ -518,7 +605,7 @@ it('runs output preservation validators for code and URLs', async () => {
   await rejected;
   const valid = value.translate('Use `foo()` at https://example.org', 'Japanese', 'English');
   await tick();
-  child().result(child().request(), { response: '`foo()`をhttps://example.orgで使う' });
+  child().result(child().request(1), { response: '`foo()`をhttps://example.orgで使う' });
   await expect(valid).resolves.toHaveProperty('translation', '`foo()`をhttps://example.orgで使う');
 });
 
@@ -608,7 +695,7 @@ it('accepts the exact reduced output budget for a long prompt', async () => {
   await expect(current.promise).resolves.toHaveProperty('translation', 'こんにちは');
 });
 
-it('cancels startup promptly before the helper becomes ready', async () => {
+it('cancels startup promptly while the model keeps loading for the next request', async () => {
   const helper = new Helper();
   fake.spawn.mockReturnValueOnce(helper);
   const controller = new AbortController();
@@ -617,23 +704,27 @@ it('cancels startup promptly before the helper becomes ready', async () => {
   const rejected = expect(pending).rejects.toThrow('Startup cancelled');
   await tick();
   controller.abort(new Error('Startup cancelled'));
-  expect(helper.kill).toHaveBeenCalledWith('SIGTERM');
   await rejected;
+  expect(helper.kill).not.toHaveBeenCalled();
+  const nextPromise = value.translate('Hello', 'Japanese', 'English');
   helper.frame(READY);
-  const next = await started(value);
-  next.helper.result(next.request);
-  await next.promise;
-  expect(helper.requests).toHaveLength(0);
+  await tick();
+  expect(helper.requests).toHaveLength(1);
+  helper.result(helper.request());
+  await nextPromise;
+  expect(fake.spawn).toHaveBeenCalledOnce();
 });
 
-it('rejects an expired queued deadline without allowing it to reload after the active timeout', async () => {
+it('lets queued work wait behind an active request that times out', async () => {
   const value = engine();
   const current = await started(value);
   const firstRejected = expect(current.promise).rejects.toThrow('timed out');
   const queued = value.warmup();
-  const queuedRejected = expect(queued).rejects.toThrow('timed out');
   await vi.advanceTimersByTimeAsync(90_000);
-  await Promise.all([firstRejected, queuedRejected]);
+  await firstRejected;
+  await tick();
+  current.helper.result(current.helper.request(1));
+  await queued;
   expect(fake.spawn).toHaveBeenCalledOnce();
 });
 

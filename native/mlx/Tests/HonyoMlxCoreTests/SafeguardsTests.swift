@@ -7,8 +7,40 @@ final class SafeguardsTests: XCTestCase {
         XCTAssertEqual(try PromptSafety.generationBudget(inputTokens: 100), 2048)
         XCTAssertEqual(try PromptSafety.generationBudget(inputTokens: 3568), 512)
         for count in [0, 3569, 4097] {
-            XCTAssertThrowsError(try PromptSafety.generationBudget(inputTokens: count))
+            XCTAssertThrowsError(try PromptSafety.generationBudget(inputTokens: count)) {
+                XCTAssertTrue($0 is PromptTooLongError)
+            }
         }
+    }
+
+    func testCancelReachesRunningRequestWithoutQueueing() throws {
+        let channel = RequestChannel()
+        channel.push(#"{"id":"a","op":"translate","target":"English","text":"hi"}"#)
+        channel.push(#"{"id":"a","op":"cancel"}"#)
+        channel.push(#"{"id":"b","op":"warmup","target":"English"}"#)
+        XCTAssertTrue(channel.isCancelled("a"))
+        XCTAssertFalse(channel.isCancelled("b"))
+        XCTAssertFalse(channel.isCancelled(""))
+        XCTAssertEqual(channel.next(), #"{"id":"a","op":"translate","target":"English","text":"hi"}"#)
+        XCTAssertEqual(channel.next(), #"{"id":"b","op":"warmup","target":"English"}"#)
+        channel.close()
+        XCTAssertNil(channel.next())
+    }
+
+    func testWaitingReaderWakesOnPushAndClose() {
+        let channel = RequestChannel()
+        let received = expectation(description: "request and end of input")
+        nonisolated(unsafe) var lines: [String?] = []
+        Thread {
+            lines.append(channel.next())
+            lines.append(channel.next())
+            received.fulfill()
+        }.start()
+        Thread.sleep(forTimeInterval: 0.05)
+        channel.push(#"{"id":"a","op":"warmup","target":"English"}"#)
+        channel.close()
+        wait(for: [received], timeout: 2)
+        XCTAssertEqual(lines, [#"{"id":"a","op":"warmup","target":"English"}"#, nil])
     }
 
     func testRequestContract() throws {
@@ -17,11 +49,13 @@ final class SafeguardsTests: XCTestCase {
         }
         XCTAssertEqual(try decode(#"{"op":"exit"}"#).op, .exit)
         XCTAssertEqual(try decode(#"{"id":"w","op":"warmup","target":"English"}"#).op, .warmup)
+        XCTAssertEqual(try decode(#"{"id":"c","op":"cancel"}"#).op, .cancel)
         for invalid in [
             #"{"id":"x","op":"translate","target":"English"}"#,
             #"{"id":"x","op":"translate","target":"French","text":"hi"}"#,
             #"{"id":"","op":"warmup","target":"English"}"#,
             #"{"id":"x","target":"English","text":"hi"}"#,
+            #"{"id":"","op":"cancel"}"#,
         ] { XCTAssertThrowsError(try decode(invalid)) }
     }
 

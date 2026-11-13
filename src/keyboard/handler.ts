@@ -9,16 +9,20 @@ import {
 import { setTrayIcon } from '../ui/tray.ts';
 import {
   showTranslationPopup,
-  closePopup,
   updatePopupTranslation,
   updatePopupLanguages,
   finalizePopupTranslation,
 } from '../ui/popup.ts';
 
-let isTranslating = false;
 let t = 0;
 let n = 0;
+// The running translation. Only it may touch the popup; a replaced or closed
+// request is aborted and cleans up nothing but its own state.
 let currentAbortController: AbortController | null = null;
+// Only the latest double copy may start, and it replaces the running
+// translation only once its input is valid.
+let latestStartId = 0;
+let pendingStart: ReturnType<typeof setTimeout> | undefined;
 
 export function setupKeyboardHandler(): void {
   uIOhook.on('keydown', e => {
@@ -40,28 +44,29 @@ export function setupKeyboardHandler(): void {
         return;
       }
 
-      // Cancel current translation if in progress
-      if (isTranslating) {
-        console.log('Translation already in progress, cancelling and starting new one...');
-        cancelCurrentTranslation();
-        // Don't return - continue with new translation
-      }
-
-      setTimeout(() => {
+      const startId = ++latestStartId;
+      clearTimeout(pendingStart);
+      pendingStart = setTimeout(() => {
+        pendingStart = undefined;
+        if (startId !== latestStartId) return;
         void (async (): Promise<void> => {
           // Create new AbortController for this translation
           const abortController = new AbortController();
+          const isCurrent = (): boolean => currentAbortController === abortController;
+          // The display mode is fixed per request so that a mode change cannot
+          // skip finishing a popup this request already opened.
+          const config = getConfig();
 
           // Wait for copy to complete
           try {
             const text = await clipboard.readText();
             console.log('Clipboard content:', text ? text.slice(0, 50) + '...' : '(empty)');
 
-            if (!text) {
+            // Superseded or closed while reading; an empty copy keeps the current translation.
+            if (startId !== latestStartId || !text.trim()) {
               return; // Do nothing
             }
 
-            const config = getConfig();
             const limit = config.maxInputCharacters;
             if (exceedsInputCharacterLimit(text, limit)) {
               new Notification({
@@ -71,8 +76,8 @@ export function setupKeyboardHandler(): void {
               return;
             }
 
-            // Start translation
-            isTranslating = true;
+            // Replace the current translation only now that this request will start.
+            abortActiveTranslation();
             setTrayIcon(true);
 
             // Set current abort controller
@@ -96,15 +101,15 @@ export function setupKeyboardHandler(): void {
                 config.targetLanguage,
                 config.secondaryLanguage,
                 (chunk: string) => {
-                  updatePopupTranslation(chunk);
+                  if (isCurrent()) updatePopupTranslation(chunk);
                 },
                 signal,
                 (source: string, target: string) => {
-                  updatePopupLanguages(source, target);
+                  if (isCurrent()) updatePopupLanguages(source, target);
                 },
               );
               // Notify that streaming is complete
-              finalizePopupTranslation(translation);
+              if (isCurrent()) finalizePopupTranslation(translation);
             } else {
               const result = await translateTextDetailed(
                 text,
@@ -121,6 +126,7 @@ export function setupKeyboardHandler(): void {
               }
             }
 
+            if (!isCurrent()) return;
             // Handle display mode
             if (config.displayMode === 'popup') {
               // Update popup window with final translation (in case streaming didn't run)
@@ -139,18 +145,12 @@ export function setupKeyboardHandler(): void {
               }).show();
             }
           } catch (error) {
-            console.error('Error in translation process:', error);
-            // Check if error is due to abortion
-            if (error instanceof Error && error.name === 'AbortError') {
+            // A replaced or closed request must not touch the popup.
+            if (abortController.signal.aborted) {
               console.log('Translation was cancelled');
-              // Don't show error notification for cancelled translations
-              // Also close popup if it's open
-              const currentConfig = getConfig();
-              if (currentConfig.displayMode === 'popup') {
-                closePopup();
-              }
             } else {
-              if (getConfig().displayMode === 'popup')
+              console.error('Error in translation process:', error);
+              if (isCurrent() && config.displayMode === 'popup')
                 finalizePopupTranslation(
                   error instanceof Error ? error.message : 'Translation failed',
                 );
@@ -161,8 +161,7 @@ export function setupKeyboardHandler(): void {
             }
           } finally {
             // Translation complete - only reset state if this is still the current translation
-            if (currentAbortController?.signal === abortController.signal) {
-              isTranslating = false;
+            if (isCurrent()) {
               setTrayIcon(false);
               currentAbortController = null;
             }
@@ -192,17 +191,24 @@ export function stopKeyboardListener(): void {
   }
 }
 
+/** Cancels the running translation and any double copy that has not started yet. */
 export function cancelCurrentTranslation(): void {
+  clearTimeout(pendingStart);
+  pendingStart = undefined;
+  ++latestStartId;
+  abortActiveTranslation();
+}
+
+function abortActiveTranslation(): void {
   if (currentAbortController) {
     currentAbortController.abort();
     console.log('Translation cancelled');
     // Reset state immediately to allow new translations
-    isTranslating = false;
     setTrayIcon(false);
     currentAbortController = null;
   }
 }
 
 export function isCurrentlyTranslating(): boolean {
-  return isTranslating;
+  return currentAbortController !== null;
 }

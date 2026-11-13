@@ -34,6 +34,29 @@ let restorePreviousAppOnClose = true;
 // resolved while a freshly-created popup window is still loading — IPC sent
 // before did-finish-load is dropped, so it is re-sent once the page is ready.
 let pendingLanguages: { sourceLanguage: string; targetLanguage: string } | null = null;
+// Latest content of the current translation. IPC sent before did-finish-load is
+// dropped, so content produced while a new window is loading (for example an
+// immediate error) must be replayed once the page is ready. Chunks are
+// cumulative, so only the latest message matters.
+type PopupContent =
+  | { channel: 'translation-loading' }
+  | { channel: 'translation-data'; payload: { translation: string; originalText: string } }
+  | { channel: 'translation-chunk' | 'translation-complete'; payload: string };
+let popupContent: PopupContent = { channel: 'translation-loading' };
+let popupReady = false;
+let backTranslateController: AbortController | null = null;
+
+function sendPopupContent(content: PopupContent): void {
+  popupContent = content;
+  if (!popupReady || !popupWindow || popupWindow.isDestroyed()) return;
+  if (content.channel === 'translation-loading') popupWindow.webContents.send(content.channel);
+  else popupWindow.webContents.send(content.channel, content.payload);
+}
+
+function cancelBackTranslation(): void {
+  backTranslateController?.abort();
+  backTranslateController = null;
+}
 
 const popupTimer = new PopupTimer(
   (remainingSeconds, urgency) => {
@@ -137,8 +160,16 @@ function restorePreviousApp(): void {
 }
 
 export function showTranslationPopup(translation: string | null, originalText: string): void {
-  // A new translation cycle starts: its language pair is not known yet.
-  pendingLanguages = null;
+  const content: PopupContent =
+    translation === null
+      ? { channel: 'translation-loading' }
+      : { channel: 'translation-data', payload: { translation, originalText } };
+  if (translation === null) {
+    // A new translation cycle starts: its language pair is not known yet, and a
+    // back-translation of the previous result must not hold the offline model.
+    pendingLanguages = null;
+    cancelBackTranslation();
+  }
 
   // Place new popups beside the visible part of the selection when available.
   const cursorPoint = screen.getCursorScreenPoint();
@@ -163,15 +194,7 @@ export function showTranslationPopup(translation: string | null, originalText: s
     // Apply current font size before updating content
     sendPopupConfig();
 
-    // Update content
-    if (translation === null) {
-      popupWindow.webContents.send('translation-loading');
-    } else {
-      popupWindow.webContents.send('translation-data', {
-        translation,
-        originalText,
-      });
-    }
+    sendPopupContent(content);
 
     resetPopupTimer();
 
@@ -187,6 +210,8 @@ export function showTranslationPopup(translation: string | null, originalText: s
   }
 
   // Create popup window (using the persisted size when available)
+  popupReady = false;
+  popupContent = content;
   const initialSize = getInitialPopupSize(placementDisplay.workArea);
   popupWindow = new BrowserWindow({
     width: initialSize.width,
@@ -226,18 +251,14 @@ export function showTranslationPopup(translation: string | null, originalText: s
   popupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   popupWindow.webContents.on('will-navigate', event => event.preventDefault());
 
-  // Send initial state once loaded
+  // Send the latest state once loaded; content may have changed while loading.
+  const createdWindow = popupWindow;
   popupWindow.webContents.once('did-finish-load', () => {
+    if (popupWindow !== createdWindow) return;
+    popupReady = true;
     sendPopupConfig();
     popupTimer.publish();
-    if (translation === null) {
-      popupWindow?.webContents.send('translation-loading');
-    } else {
-      popupWindow?.webContents.send('translation-data', {
-        translation,
-        originalText,
-      });
-    }
+    sendPopupContent(popupContent);
     // Re-deliver the language pair if it resolved while the page was loading
     // (IPC sent before did-finish-load is dropped).
     if (pendingLanguages) {
@@ -257,33 +278,33 @@ export function showTranslationPopup(translation: string | null, originalText: s
 
   popupWindow.on('closed', () => {
     popupTimer.stop();
+    cancelBackTranslation();
     if (restorePreviousAppOnClose) {
       restorePreviousApp();
     } else {
       previousActiveApp = null;
     }
     restorePreviousAppOnClose = true;
-    popupWindow = null;
+    if (popupWindow === createdWindow) {
+      popupWindow = null;
+      popupReady = false;
+    }
   });
 }
 
 export function updatePopupTranslation(text: string): void {
-  if (popupWindow && !popupWindow.isDestroyed()) {
-    popupWindow.webContents.send('translation-chunk', text);
-  }
+  sendPopupContent({ channel: 'translation-chunk', payload: text });
 }
 
 export function updatePopupLanguages(sourceLanguage: string, targetLanguage: string): void {
   pendingLanguages = { sourceLanguage, targetLanguage };
-  if (popupWindow && !popupWindow.isDestroyed()) {
+  if (popupReady && popupWindow && !popupWindow.isDestroyed()) {
     popupWindow.webContents.send('translation-langs', pendingLanguages);
   }
 }
 
 export function finalizePopupTranslation(text: string): void {
-  if (popupWindow && !popupWindow.isDestroyed()) {
-    popupWindow.webContents.send('translation-complete', text);
-  }
+  sendPopupContent({ channel: 'translation-complete', payload: text });
 }
 
 async function writeClipboardText(text: string): Promise<void> {
@@ -322,6 +343,9 @@ export function setupPopupIPC(): void {
     if (!isPopupEvent(event)) return;
     void (async (): Promise<void> => {
       if (!popupWindow || popupWindow.isDestroyed() || !text) return;
+      cancelBackTranslation();
+      const controller = new AbortController();
+      backTranslateController = controller;
       try {
         const config = getConfig();
         // The language-detection rules translate the translation back to the
@@ -330,20 +354,23 @@ export function setupPopupIPC(): void {
           text,
           config.targetLanguage,
           config.secondaryLanguage,
+          controller.signal,
         );
-        if (!popupWindow || popupWindow.isDestroyed()) return;
+        if (controller.signal.aborted || !popupWindow || popupWindow.isDestroyed()) return;
         popupWindow.webContents.send('back-translation-result', {
           translation: result.translation,
           sourceLanguage: result.sourceLanguage,
           targetLanguage: result.targetLanguage,
         });
       } catch (error) {
-        if (popupWindow && !popupWindow.isDestroyed()) {
+        if (!controller.signal.aborted && popupWindow && !popupWindow.isDestroyed()) {
           popupWindow.webContents.send(
             'back-translation-error',
             error instanceof Error ? error.message : String(error),
           );
         }
+      } finally {
+        if (backTranslateController === controller) backTranslateController = null;
       }
     })();
   });

@@ -225,13 +225,16 @@ final class Plamo {
         return x
     }
 
-    func prefill(_ tokens: ArraySlice<Int>, cache: [PlamoCache]) {
+    /// Returns false when `stop` interrupted it between batches.
+    func prefill(_ tokens: ArraySlice<Int>, cache: [PlamoCache], stop: () -> Bool) -> Bool {
         let input = Array(tokens)
         for start in stride(from: 0, to: input.count, by: 512) {
+            if stop() { return false }
             let hidden = forward(Array(input[start..<min(start + 512, input.count)]), cache: cache)
             eval(hidden)
             eval(cache.flatMap { [$0.keys, $0.values] })
             Memory.clearCache()
         }
+        return true
     }
 }

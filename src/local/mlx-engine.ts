@@ -4,7 +4,13 @@ import { randomUUID } from 'node:crypto';
 import { localDirection, validateLocalInput, validateLocalOutput } from './model.ts';
 import type { LocalResult } from './model.ts';
 
+/** Inference deadline, counted from the moment the request reaches the loaded helper. */
 const TIMEOUT_MS = 90_000;
+/** Loading a large model (31B) from a cold disk cache can take minutes. */
+const LOAD_TIMEOUT_MS = 5 * 60_000;
+/** A cancelled request must be acknowledged this quickly, or the helper is replaced. */
+const CANCEL_GRACE_MS = 5_000;
+const PROTOCOL_VERSION = 2;
 const MAX_LINE_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_PROTOCOL_BYTES = 1024 * 1024;
@@ -23,11 +29,13 @@ interface Operation {
   protocolBytes: number;
   done: boolean;
   terminal: boolean;
-  expiresAt: number;
   resolve: (response: string) => void;
   reject: (error: unknown) => void;
   promise: Promise<string>;
   cleanup: () => void;
+  grace: ReturnType<typeof setTimeout> | undefined;
+  /** Resolves once the helper no longer works on this operation. */
+  released: PromiseWithResolvers<void>;
 }
 
 interface Helper {
@@ -59,16 +67,29 @@ function timeoutError(): Error {
   return new Error('Offline translation timed out after 90 seconds. Please retry.');
 }
 
+function loadTimeoutError(): Error {
+  return new Error('Loading the offline model timed out. Please retry.');
+}
+
+function inputTooLongError(): Error {
+  return new Error(
+    'The text is too long for the offline model. Please shorten or split it and retry.',
+  );
+}
+
 function tokenCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** Persistent native helper; all model work is serialized, with no idle unload or mid-stream retry. */
+/**
+ * Persistent native helper; all model work is serialized, with no idle unload or mid-stream retry.
+ * Cancelling a request keeps the loaded model: a queued or loading request is simply dropped,
+ * and a running one is stopped by a cancel frame. The helper is replaced only on failures.
+ */
 export class MlxEngine {
   private helper: Helper | undefined;
   private tail: Promise<void> = Promise.resolve();
   private stopping: Promise<void> = Promise.resolve();
-  private generation = 0;
   private readonly operations = new Set<Operation>();
 
   private readonly modelPath: string;
@@ -101,7 +122,6 @@ export class MlxEngine {
 
   release(): Promise<void> {
     // Invalidate queued calls immediately, rather than waiting behind a blocked GPU operation.
-    ++this.generation;
     for (const operation of this.operations) this.finish(operation, releasedError());
     if (this.helper) this.discard(this.helper, releasedError());
     return Promise.all([this.tail, this.stopping]).then(() => undefined);
@@ -120,7 +140,6 @@ export class MlxEngine {
           ? signal.reason
           : new Error('Offline translation cancelled.'),
       );
-    const generation = this.generation;
     const deferred = Promise.withResolvers<string>();
     const operation: Operation = {
       id: randomUUID(),
@@ -134,48 +153,41 @@ export class MlxEngine {
       protocolBytes: 0,
       done: false,
       terminal: false,
-      expiresAt: performance.now() + TIMEOUT_MS,
       ...deferred,
       cleanup: () => undefined,
+      grace: undefined,
+      released: Promise.withResolvers<void>(),
     };
     this.operations.add(operation);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const cancel = (error: unknown): void => {
       if (operation.done) return;
       this.finish(operation, error);
-      // Cancellation of a queued request must not kill another request's resident state.
+      // Queued and loading requests are dropped without touching the helper; the model
+      // keeps loading for the next request. Only running work needs to be stopped.
       const helper = this.helper;
-      if (helper?.pending === operation || (this.active === operation && helper))
-        this.discard(helper, error);
+      if (helper?.pending === operation) this.requestCancel(helper, operation, error);
     };
     const onAbort = (): void => cancel(signal?.reason);
-    const timer = setTimeout(() => cancel(timeoutError()), TIMEOUT_MS);
-    const finishedOrExpired = (): boolean => {
-      if (!operation.done && performance.now() >= operation.expiresAt) cancel(timeoutError());
-      return operation.done;
-    };
     signal?.addEventListener('abort', onAbort, { once: true });
     operation.cleanup = (): void => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       this.operations.delete(operation);
     };
-    // Covers queueing, spawning, model load, prefill and generation with one deadline.
     const run = async (): Promise<void> => {
-      if (finishedOrExpired()) return;
-      if (generation !== this.generation) {
-        this.finish(operation, releasedError());
-        return;
-      }
+      if (operation.done) return;
       this.active = operation;
       let helper: Helper | undefined;
       try {
         await this.stopping;
-        if (finishedOrExpired()) return;
+        if (operation.done) return;
         helper = this.helper ?? this.start();
         await helper.ready;
-        if (finishedOrExpired()) return;
+        if (operation.done) return;
         if (this.helper !== helper) throw new Error('MLX helper exited unexpectedly.');
         helper.pending = operation;
+        timer = setTimeout(() => cancel(timeoutError()), TIMEOUT_MS);
         const request = {
           id: operation.id,
           op,
@@ -186,7 +198,8 @@ export class MlxEngine {
           if (error && helper && this.helper === helper)
             this.discard(helper, new Error('Could not write to the MLX helper.'));
         });
-        await operation.promise;
+        // Wait until the helper is free, not merely until the caller was answered.
+        await operation.released.promise;
       } catch (error) {
         this.finish(operation, error);
         if (helper && this.helper === helper) this.discard(helper, error);
@@ -199,6 +212,25 @@ export class MlxEngine {
   }
 
   private active: Operation | undefined;
+
+  private requestCancel(helper: Helper, operation: Operation, error: unknown): void {
+    // Called once: cancel() returns early for a finished operation.
+    if (operation.terminal) return;
+    helper.child.stdin.write(JSON.stringify({ id: operation.id, op: 'cancel' }) + '\n', failed => {
+      if (failed && this.helper === helper)
+        this.discard(helper, new Error('Could not write to the MLX helper.'));
+    });
+    operation.grace = setTimeout(() => {
+      if (this.helper === helper && helper.pending === operation) this.discard(helper, error);
+    }, CANCEL_GRACE_MS);
+  }
+
+  /** The helper finished this operation and is ready for the next one. */
+  private releaseHelper(helper: Helper, operation: Operation): void {
+    if (helper.pending === operation) helper.pending = undefined;
+    clearTimeout(operation.grace);
+    operation.released.resolve();
+  }
 
   private finish(operation: Operation, error?: unknown, response = ''): void {
     if (operation.done) return;
@@ -234,6 +266,13 @@ export class MlxEngine {
     // Startup can fail between creation and the awaiting continuation.
     void helper.ready.catch(() => undefined);
     this.helper = helper;
+    const loadTimer = setTimeout(() => {
+      if (this.helper === helper && !helper.isReady) this.discard(helper, loadTimeoutError());
+    }, LOAD_TIMEOUT_MS);
+    void helper.ready.then(
+      () => clearTimeout(loadTimer),
+      () => clearTimeout(loadTimer),
+    );
     child.stdout.on('data', (data: Buffer) => this.consume(helper, data));
     child.stderr.on('data', (data: Buffer) => {
       if (this.helper !== helper) return;
@@ -314,7 +353,7 @@ export class MlxEngine {
         throw new Error('The native MLX helper could not load the offline model.');
       if (
         frame.type !== 'ready' ||
-        frame.protocol !== 1 ||
+        frame.protocol !== PROTOCOL_VERSION ||
         frame.modelType !== 'plamo3' ||
         frame.decoder !== 'metal' ||
         frame.contextSize !== 4096
@@ -325,12 +364,32 @@ export class MlxEngine {
       return;
     }
     const operation = helper.pending;
-    if (!operation || operation.done || operation.terminal || frame.id !== operation.id)
-      throw protocolError();
-    if (performance.now() >= operation.expiresAt) throw timeoutError();
+    if (!operation || operation.terminal || frame.id !== operation.id) throw protocolError();
     if (++operation.frames > MAX_FRAMES) throw protocolError();
+    if (operation.done) {
+      // Cancelled: drop output until the helper reports that it stopped.
+      if (frame.type === 'chunk') return;
+      if (
+        frame.type === 'cancelled' ||
+        frame.type === 'result' ||
+        (frame.type === 'error' && frame.code === 'input-too-long')
+      ) {
+        operation.terminal = true;
+        this.releaseHelper(helper, operation);
+        return;
+      }
+      throw protocolError();
+    }
+    if (frame.type === 'cancelled') throw protocolError();
     if (frame.type === 'error') {
       if (typeof frame.error !== 'string' || !frame.error.trim()) throw protocolError();
+      if (frame.code === 'input-too-long') {
+        // Rejected before any GPU work; the helper stays loaded.
+        operation.terminal = true;
+        this.releaseHelper(helper, operation);
+        this.finish(operation, inputTooLongError());
+        return;
+      }
       throw new Error('The native MLX helper could not complete the request. Please retry.');
     }
     if (frame.type === 'chunk') {
@@ -353,6 +412,9 @@ export class MlxEngine {
       Buffer.byteLength(frame.response) > MAX_OUTPUT_BYTES
     )
       throw protocolError();
+    // A well-formed result that cannot be shown fails only this request; the helper is
+    // already waiting for the next one, so keep the loaded model.
+    let rejected: Error | undefined;
     if (operation.op === 'warmup') {
       if (
         frame.response !== '' ||
@@ -372,23 +434,30 @@ export class MlxEngine {
       )
         throw protocolError();
       if (frame.stopReason === 'length' || frame.outputTokens === frame.maxTokens)
-        throw new Error('Translation reached its length limit. Please split the text and retry.');
-      if (frame.stopReason !== 'stop' || frame.maxTokens === 0) throw protocolError();
-      if (frame.echoedSource || frame.response.trim() === operation.source?.trim())
-        throw new Error(
+        rejected = new Error(
+          'Translation reached its length limit. Please split the text and retry.',
+        );
+      else if (frame.stopReason !== 'stop' || frame.maxTokens === 0) throw protocolError();
+      else if (operation.streamed && operation.streamed.trim() !== frame.response.trim())
+        throw protocolError();
+      else if (frame.echoedSource || frame.response.trim() === operation.source?.trim())
+        rejected = new Error(
           'The offline model echoed the source instead of translating it. Please retry.',
         );
-      if (operation.streamed && operation.streamed.trim() !== frame.response.trim())
-        throw protocolError();
-      validateLocalOutput(frame.response.trim(), operation.source);
+      else
+        try {
+          validateLocalOutput(frame.response.trim(), operation.source);
+        } catch (error) {
+          rejected = error instanceof Error ? error : protocolError();
+        }
     }
     const response = frame.response.trim();
     operation.terminal = true;
     // Process the rest of this stdout batch before resolving (duplicate/trailing frames are invalid).
     queueMicrotask(() => {
-      if (this.helper !== helper || operation.done) return;
-      helper.pending = undefined;
-      this.finish(operation, undefined, response);
+      if (this.helper !== helper || helper.pending !== operation) return;
+      this.releaseHelper(helper, operation);
+      this.finish(operation, rejected, response);
     });
   }
 
@@ -396,7 +465,11 @@ export class MlxEngine {
     if (this.helper !== helper) return;
     this.helper = undefined;
     helper.rejectReady(error);
-    if (helper.pending) this.finish(helper.pending, error);
+    if (helper.pending) {
+      this.finish(helper.pending, error);
+      clearTimeout(helper.pending.grace);
+      helper.pending.released.resolve();
+    }
     // A failure during startup belongs to the active operation, too.
     if (this.active) this.finish(this.active, error);
     helper.pending = undefined;
