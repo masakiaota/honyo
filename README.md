@@ -32,6 +32,14 @@ Offline English ↔ Japanese translation requires an Apple Silicon Mac and a one
 
 Cloud translation sends the source text and any custom instructions to the selected AI service. Its data-handling policies apply. Offline translation keeps the source text on your Mac.
 
+## Install
+
+On Apple Silicon Macs, you can install the prebuilt app via Homebrew:
+
+```console
+$ brew install --cask masakiaota/tap/honyo
+```
+
 ## Run from source
 
 This fork currently has no packaged releases. Build and run it from this repository.
